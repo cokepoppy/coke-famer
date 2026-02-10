@@ -110,6 +110,11 @@ body {
   margin-bottom: 10px;
 }
 
+.inv-header-right {
+  display: flex;
+  gap: 8px;
+}
+
 .inv-title {
   font-weight: 700;
 }
@@ -150,6 +155,46 @@ body {
   opacity: 0.95;
 }
 
+.shop-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 16, 0.92);
+  max-width: 720px;
+}
+
+.shop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.shop-title {
+  font-weight: 700;
+}
+
+.shop-body {
+  display: grid;
+  gap: 8px;
+}
+
+.shop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.shop-left {
+  opacity: 0.95;
+}
+
 .btn {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
@@ -165,6 +210,12 @@ body {
 
 #hud-controls {
   user-select: none;
+}
+
+.subhint {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 #game-container {

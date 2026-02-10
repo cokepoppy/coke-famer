@@ -72,3 +72,48 @@ test("farming loop: hoe -> water -> plant -> sleep -> harvest", async ({ page })
   const inv1 = await page.evaluate(() => (window as any).__cokeFamer.inventory);
   expect(inv1.parsnip).toBeGreaterThanOrEqual(1);
 });
+
+test("economy loop: buy seeds and sell harvest", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const before = await page.evaluate(() => ({ gold: (window as any).__cokeFamer.gold, seeds: (window as any).__cokeFamer.inventory.parsnip_seed }));
+  expect(before.gold).toBeGreaterThanOrEqual(100);
+
+  const buy = await page.evaluate(() => (window as any).__cokeFamer.api.shopBuy("parsnip_seed", 5));
+  expect(buy.ok).toBeTruthy();
+
+  const afterBuy = await page.evaluate(() => ({ gold: (window as any).__cokeFamer.gold, seeds: (window as any).__cokeFamer.inventory.parsnip_seed }));
+  expect(afterBuy.seeds).toBeGreaterThanOrEqual(before.seeds + 5);
+  expect(afterBuy.gold).toBeLessThan(before.gold);
+
+  // Harvest one parsnip (use deterministic API at player tile).
+  await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+    s.api.useAt(tx, ty, "hoe");
+    s.api.useAt(tx, ty, "watering_can");
+    s.api.useAt(tx, ty, "parsnip_seed");
+    for (let i = 0; i < 4; i++) {
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.sleep();
+    }
+    s.api.useAt(tx, ty, "hand");
+  });
+
+  const invSlots = await page.evaluate(() => (window as any).__cokeFamer.inventorySlots);
+  const parsnipIndex = invSlots.findIndex((s: any) => s?.itemId === "parsnip");
+  expect(parsnipIndex).toBeGreaterThanOrEqual(0);
+
+  const sold = await page.evaluate((idx) => {
+    const s = (window as any).__cokeFamer;
+    const picked = s.api.invPickup(idx);
+    const res = s.api.sellStack(picked);
+    return { picked, res, gold: s.gold };
+  }, parsnipIndex);
+  expect(sold.picked).toBeTruthy();
+  expect(sold.res.ok).toBeTruthy();
+  expect(sold.res.goldGained).toBeGreaterThan(0);
+});

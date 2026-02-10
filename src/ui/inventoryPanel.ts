@@ -23,7 +23,12 @@ export function mountInventoryPanel(host: HTMLElement): {
 
   title.textContent = "Inventory";
   header.appendChild(title);
-  header.appendChild(closeBtn);
+  const headerRight = el("div", "inv-header-right");
+  const sellBtn = el("button", "btn");
+  sellBtn.textContent = "Sell Cursor";
+  headerRight.appendChild(sellBtn);
+  headerRight.appendChild(closeBtn);
+  header.appendChild(headerRight);
   panel.appendChild(header);
 
   const grid = el("div", "inv-grid");
@@ -84,6 +89,13 @@ export function mountInventoryPanel(host: HTMLElement): {
 
     const placed = api.invPlaceOne(slotIndex, cursor as any) as any;
     cursor = placed.remaining;
+    syncCursorLine();
+  };
+
+  sellBtn.onclick = () => {
+    if (!cursor) return;
+    window.__cokeFamer?.api?.sellStack({ itemId: cursor.itemId, qty: cursor.qty });
+    cursor = null;
     syncCursorLine();
   };
 

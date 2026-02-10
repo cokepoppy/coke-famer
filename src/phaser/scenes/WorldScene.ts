@@ -282,6 +282,7 @@ export class WorldScene extends Phaser.Scene {
         parsnip_seed: this.gameState.countItem("parsnip_seed"),
         parsnip: this.gameState.countItem("parsnip")
       },
+      gold: this.gameState.gold,
       timePaused: this.timePaused,
       toast: null,
       tilledCount: this.farmVisuals.size,
@@ -337,6 +338,21 @@ export class WorldScene extends Phaser.Scene {
             ok: res.ok,
             remaining: res.remaining ? { itemId: res.remaining.itemId, qty: res.remaining.qty } : null
           };
+        },
+        shopBuy: (itemId: string, qty: number) => {
+          const res = this.gameState.buy(itemId as any, qty);
+          if (!res.ok) this.toast(`Buy failed: ${res.reason ?? "unknown"}`, "warn");
+          this.syncWindowState();
+          this.gameState.saveToStorage();
+          return res;
+        },
+        sellStack: (stack: { itemId: string; qty: number }) => {
+          const res = this.gameState.sellStack(stack as any);
+          if (res.ok) this.toast(`Sold +${res.goldGained}g`, "info");
+          else this.toast(`Sell failed: ${res.reason ?? "unknown"}`, "warn");
+          this.syncWindowState();
+          this.gameState.saveToStorage();
+          return res;
         }
       }
     };
@@ -463,6 +479,7 @@ export class WorldScene extends Phaser.Scene {
       parsnip_seed: this.gameState?.countItem("parsnip_seed") ?? 0,
       parsnip: this.gameState?.countItem("parsnip") ?? 0
     };
+    window.__cokeFamer.gold = this.gameState?.gold ?? window.__cokeFamer.gold;
     window.__cokeFamer.inventorySlots = this.gameState
       ?.getInventorySlots()
       .map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null));

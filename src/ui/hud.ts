@@ -1,4 +1,5 @@
 import { mountInventoryPanel } from "./inventoryPanel";
+import { mountShopPanel } from "./shopPanel";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string) {
   const node = document.createElement(tag);
@@ -33,6 +34,7 @@ export function mountHud(containerId: string): void {
     `Day: <span id="hud-day">?</span> | ` +
     `Time: <span id="hud-time">?</span> | ` +
     `Energy: <span id="hud-energy">?</span> | ` +
+    `Gold: <span id="hud-gold">?</span> | ` +
     `Mode: <span id="hud-mode">?</span> | ` +
     `Tile: <span id="hud-tile">?</span>`;
   invLine.innerHTML =
@@ -53,6 +55,10 @@ export function mountHud(containerId: string): void {
   hotbar.id = "hud-hotbar";
   host.appendChild(hotbar);
 
+  const subHint = el("div", "subhint");
+  subHint.textContent = "I: Inventory | O: Shop | P: Pause";
+  host.appendChild(subHint);
+
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
   const btnPause = document.getElementById("btn-pause") as HTMLButtonElement;
   const btnSave = document.getElementById("btn-save") as HTMLButtonElement;
@@ -71,6 +77,7 @@ export function mountHud(containerId: string): void {
   const hudDay = document.getElementById("hud-day")!;
   const hudTime = document.getElementById("hud-time")!;
   const hudEnergy = document.getElementById("hud-energy")!;
+  const hudGold = document.getElementById("hud-gold")!;
   const hudMode = document.getElementById("hud-mode")!;
   const hudTile = document.getElementById("hud-tile")!;
   const hudSeeds = document.getElementById("hud-seeds")!;
@@ -85,6 +92,10 @@ export function mountHud(containerId: string): void {
   const invHost = el("div");
   host.appendChild(invHost);
   const { setOpen: setInvOpen, isOpen: isInvOpen, render: renderInv } = mountInventoryPanel(invHost);
+
+  const shopHost = el("div");
+  host.appendChild(shopHost);
+  const { setOpen: setShopOpen, isOpen: isShopOpen, render: renderShop } = mountShopPanel(shopHost);
 
   let invPausedByUi = false;
   const openInventory = () => {
@@ -107,11 +118,34 @@ export function mountHud(containerId: string): void {
     else openInventory();
   };
 
+  let shopPausedByUi = false;
+  const openShop = () => {
+    setShopOpen(true);
+    const paused = Boolean(window.__cokeFamer?.timePaused);
+    if (!paused) {
+      shopPausedByUi = true;
+      window.__cokeFamer?.api?.setPaused(true);
+    }
+  };
+  const closeShop = () => {
+    setShopOpen(false);
+    if (shopPausedByUi) {
+      shopPausedByUi = false;
+      window.__cokeFamer?.api?.setPaused(false);
+    }
+  };
+  const toggleShop = () => {
+    if (isShopOpen()) closeShop();
+    else openShop();
+  };
+
   window.addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "i") toggleInventory();
+    if (e.key.toLowerCase() === "o") toggleShop();
   });
 
   invHost.addEventListener("inventory:close", () => closeInventory());
+  shopHost.addEventListener("shop:close", () => closeShop());
 
   const renderHotbar = (mode: string, inventory: Record<string, number>) => {
     const entries: Array<{ key: string; label: string }> = [
@@ -139,6 +173,7 @@ export function mountHud(containerId: string): void {
       hudParsnip.textContent = String(s.inventory.parsnip ?? 0);
       hudTime.textContent = s.timeText ?? "?";
       hudEnergy.textContent = `${s.energy ?? "?"}/${s.energyMax ?? "?"}`;
+      hudGold.textContent = String(s.gold ?? 0);
       renderHotbar(s.mode, s.inventory);
 
       btnPause.textContent = s.timePaused ? "Resume" : "Pause";
@@ -154,6 +189,7 @@ export function mountHud(containerId: string): void {
       }
 
       renderInv();
+      renderShop();
     }
     requestAnimationFrame(render);
   };

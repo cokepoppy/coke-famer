@@ -44,6 +44,17 @@ export type GameSaveV2 = {
   day: number;
   minutes: number;
   energy: number;
+  gold: number;
+  inventorySlots: Array<InventorySlot | null>;
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+};
+
+export type GameSaveV3 = {
+  version: 3;
+  day: number;
+  minutes: number;
+  energy: number;
+  gold: number;
   inventorySlots: Array<InventorySlot | null>;
   tiles: Array<{ tx: number; ty: number; state: TileState }>;
 };

@@ -13,6 +13,7 @@ declare global {
       mode: string;
       inventory: Record<string, number>;
       inventorySlots?: Array<{ itemId: string; qty: number } | null>;
+      gold?: number;
       timePaused?: boolean;
       toast?: { text: string; kind: "info" | "warn" | "error"; ts: number } | null;
       tilledCount: number;
@@ -32,6 +33,8 @@ declare global {
           index: number,
           stack: { itemId: string; qty: number }
         ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
+        shopBuy: (itemId: string, qty: number) => { ok: boolean; reason?: string };
+        sellStack: (stack: { itemId: string; qty: number }) => { ok: boolean; goldGained?: number; reason?: string };
       };
     };
   }

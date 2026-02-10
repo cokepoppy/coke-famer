@@ -4,18 +4,20 @@ import type {
   GameSaveV0,
   GameSaveV1,
   GameSaveV2,
+  GameSaveV3,
   InventorySlot,
   TileKey,
   TileState
 } from "./types";
 
 const SAVE_KEY = "coke-famer-save";
-const CURRENT_SAVE_VERSION = 2 as const;
+const CURRENT_SAVE_VERSION = 3 as const;
 
 const DAY_START_MINUTES = 6 * 60;
 const DAY_END_MINUTES = 26 * 60; // 2:00 next day (allow wrap handling in UI)
 const ENERGY_MAX = 270;
 const INVENTORY_SIZE = 24;
+const START_GOLD = 500;
 
 const ACTION_MINUTES = {
   hoe: 10,
@@ -47,6 +49,7 @@ export class FarmGame {
   day = 1;
   minutes = DAY_START_MINUTES;
   energy = ENERGY_MAX;
+  gold = START_GOLD;
   inventorySlots: Array<InventorySlot | null> = Array.from({ length: INVENTORY_SIZE }, () => null);
   private tiles = new Map<TileKey, TileState>();
 
@@ -55,6 +58,7 @@ export class FarmGame {
     g.day = 1;
     g.minutes = DAY_START_MINUTES;
     g.energy = ENERGY_MAX;
+    g.gold = START_GOLD;
     g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
     g.addItem("parsnip_seed", 15);
     return g;
@@ -63,7 +67,7 @@ export class FarmGame {
   static loadFromStorage(): FarmGame | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2;
+    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3;
     if (!parsed) return null;
 
     const g = new FarmGame();
@@ -71,6 +75,7 @@ export class FarmGame {
       g.day = parsed.day;
       g.minutes = DAY_START_MINUTES;
       g.energy = ENERGY_MAX;
+      g.gold = START_GOLD;
       g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
@@ -82,6 +87,7 @@ export class FarmGame {
       g.day = parsed.day;
       g.minutes = parsed.minutes ?? DAY_START_MINUTES;
       g.energy = parsed.energy ?? ENERGY_MAX;
+      g.gold = START_GOLD;
       g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
@@ -93,6 +99,19 @@ export class FarmGame {
       g.day = parsed.day;
       g.minutes = parsed.minutes ?? DAY_START_MINUTES;
       g.energy = parsed.energy ?? ENERGY_MAX;
+      g.gold = parsed.gold ?? START_GOLD;
+      g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
+      while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
+      for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      // Migrate-on-load to V3 if needed.
+      g.saveToStorage();
+      return g;
+    }
+    if (parsed.version === 3) {
+      g.day = parsed.day;
+      g.minutes = parsed.minutes ?? DAY_START_MINUTES;
+      g.energy = parsed.energy ?? ENERGY_MAX;
+      g.gold = parsed.gold ?? START_GOLD;
       g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
@@ -107,12 +126,13 @@ export class FarmGame {
       const [txStr, tyStr] = k.split(",");
       tiles.push({ tx: Number(txStr), ty: Number(tyStr), state });
     }
-    const save: GameSaveV2 = {
+    const save: GameSaveV3 = {
       version: CURRENT_SAVE_VERSION,
       day: this.day,
       minutes: this.minutes,
       energy: this.energy,
       inventorySlots: this.inventorySlots,
+      gold: this.gold,
       tiles
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -123,6 +143,7 @@ export class FarmGame {
     this.day = fresh.day;
     this.minutes = fresh.minutes;
     this.energy = fresh.energy;
+    this.gold = fresh.gold;
     this.inventorySlots = fresh.inventorySlots;
     this.tiles = new Map();
     this.saveToStorage();
@@ -207,6 +228,41 @@ export class FarmGame {
       if (slot?.itemId === itemId) total += slot.qty;
     }
     return total;
+  }
+
+  private capacityFor(itemId: ItemId): number {
+    const max = ITEMS[itemId].maxStack;
+    let cap = 0;
+    for (const slot of this.inventorySlots) {
+      if (!slot) cap += max;
+      else if (slot.itemId === itemId) cap += Math.max(0, max - slot.qty);
+    }
+    return cap;
+  }
+
+  canAddItem(itemId: ItemId, qty: number): boolean {
+    return this.capacityFor(itemId) >= qty;
+  }
+
+  buy(itemId: ItemId, qty: number): { ok: boolean; reason?: string } {
+    if (qty <= 0) return { ok: false, reason: "qty" };
+    const def = ITEMS[itemId];
+    if (def.buyPrice == null) return { ok: false, reason: "not_for_sale" };
+    const cost = def.buyPrice * qty;
+    if (this.gold < cost) return { ok: false, reason: "gold" };
+    if (!this.canAddItem(itemId, qty)) return { ok: false, reason: "inv_full" };
+    const added = this.addItem(itemId, qty);
+    if (!added) return { ok: false, reason: "inv_full" };
+    this.gold -= cost;
+    return { ok: true };
+  }
+
+  sellStack(stack: InventorySlot): { ok: boolean; goldGained?: number; reason?: string } {
+    if (!stack || stack.qty <= 0) return { ok: false, reason: "stack" };
+    const def = ITEMS[stack.itemId];
+    const gain = def.sellPrice * stack.qty;
+    this.gold += gain;
+    return { ok: true, goldGained: gain };
   }
 
   inventoryPickup(index: number): InventorySlot | null {
