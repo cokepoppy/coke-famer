@@ -1,0 +1,49 @@
+import type { CropId } from "../content/crops";
+import type { ItemId } from "../content/items";
+
+export type ToolId = "hoe" | "watering_can" | "hand";
+export type ActionId = ToolId | ItemId;
+
+export type TileKey = `${number},${number}`;
+
+export type CropState = {
+  cropId: CropId;
+  stage: number; // 0..maxStage (maxStage means harvestable)
+  daysInStage: number;
+};
+
+export type TileState = {
+  tilled: boolean;
+  watered: boolean;
+  crop: CropState | null;
+};
+
+export type InventorySlot = {
+  itemId: ItemId;
+  qty: number;
+};
+
+export type GameSaveV0 = {
+  version: 0;
+  day: number;
+  inventory: InventorySlot[];
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+};
+
+export type GameSaveV1 = {
+  version: 1;
+  day: number;
+  minutes: number; // minutes since 00:00 within the day (e.g. 6:00 => 360)
+  energy: number;
+  inventory: InventorySlot[];
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+};
+
+export type GameSaveV2 = {
+  version: 2;
+  day: number;
+  minutes: number;
+  energy: number;
+  inventorySlots: Array<InventorySlot | null>;
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+};
