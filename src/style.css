@@ -120,6 +120,12 @@ body {
   gap: 6px;
 }
 
+.inv-cursor {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
 .inv-slot {
   height: 44px;
   border-radius: 10px;

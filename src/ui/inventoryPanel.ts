@@ -6,6 +6,10 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string) {
   return node;
 }
 
+function stopContextMenu(node: HTMLElement) {
+  node.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
 export function mountInventoryPanel(host: HTMLElement): {
   setOpen: (open: boolean) => void;
   isOpen: () => boolean;
@@ -25,9 +29,13 @@ export function mountInventoryPanel(host: HTMLElement): {
   const grid = el("div", "inv-grid");
   panel.appendChild(grid);
 
+  const cursorLine = el("div", "inv-cursor");
+  panel.appendChild(cursorLine);
+
   host.appendChild(panel);
 
   let open = false;
+  let cursor: InventorySlot | null = null;
 
   const setOpen = (next: boolean) => {
     const prev = open;
@@ -40,6 +48,44 @@ export function mountInventoryPanel(host: HTMLElement): {
 
   closeBtn.onclick = () => setOpen(false);
   setOpen(false);
+
+  stopContextMenu(panel);
+
+  const syncCursorLine = () => {
+    cursorLine.textContent = cursor ? `Cursor: ${cursor.itemId} x${cursor.qty}` : "Cursor: (empty)";
+  };
+  syncCursorLine();
+
+  const leftClick = (slotIndex: number) => {
+    const api = window.__cokeFamer?.api;
+    if (!api) return;
+
+    if (!cursor) {
+      cursor = api.invPickup(slotIndex) as any;
+      syncCursorLine();
+      return;
+    }
+
+    const res = api.invPlace(slotIndex, cursor as any) as any;
+    // If place returned a different item, that's a swap; otherwise it's remainder.
+    cursor = res;
+    syncCursorLine();
+  };
+
+  const rightClick = (slotIndex: number) => {
+    const api = window.__cokeFamer?.api;
+    if (!api) return;
+
+    if (!cursor) {
+      cursor = api.invSplitHalf(slotIndex) as any;
+      syncCursorLine();
+      return;
+    }
+
+    const placed = api.invPlaceOne(slotIndex, cursor as any) as any;
+    cursor = placed.remaining;
+    syncCursorLine();
+  };
 
   const render = () => {
     if (!open) return;
@@ -59,6 +105,12 @@ export function mountInventoryPanel(host: HTMLElement): {
         name.textContent = "";
         qty.textContent = "";
       }
+
+      cell.onmousedown = (ev) => {
+        if (ev.button === 2) rightClick(i);
+        else leftClick(i);
+      };
+      stopContextMenu(cell);
 
       cell.appendChild(name);
       cell.appendChild(qty);

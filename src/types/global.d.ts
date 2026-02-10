@@ -25,6 +25,13 @@ declare global {
         reset: () => void;
         useAt: (tx: number, ty: number, mode?: string) => boolean;
         setPaused: (paused: boolean) => void;
+        invPickup: (index: number) => { itemId: string; qty: number } | null;
+        invSplitHalf: (index: number) => { itemId: string; qty: number } | null;
+        invPlace: (index: number, stack: { itemId: string; qty: number }) => { itemId: string; qty: number } | null;
+        invPlaceOne: (
+          index: number,
+          stack: { itemId: string; qty: number }
+        ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
       };
     };
   }

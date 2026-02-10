@@ -314,6 +314,29 @@ export class WorldScene extends Phaser.Scene {
         },
         setPaused: (paused: boolean) => {
           this.setPaused(paused);
+        },
+        invPickup: (index: number) => {
+          const picked = this.gameState.inventoryPickup(index);
+          this.syncWindowState();
+          return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+        },
+        invSplitHalf: (index: number) => {
+          const picked = this.gameState.inventorySplitHalf(index);
+          this.syncWindowState();
+          return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+        },
+        invPlace: (index: number, stack: { itemId: string; qty: number }) => {
+          const rem = this.gameState.inventoryPlace(index, stack as any);
+          this.syncWindowState();
+          return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
+        },
+        invPlaceOne: (index: number, stack: { itemId: string; qty: number }) => {
+          const res = this.gameState.inventoryPlaceOne(index, stack as any);
+          this.syncWindowState();
+          return {
+            ok: res.ok,
+            remaining: res.remaining ? { itemId: res.remaining.itemId, qty: res.remaining.qty } : null
+          };
         }
       }
     };

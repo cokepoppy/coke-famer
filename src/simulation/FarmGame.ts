@@ -1,5 +1,5 @@
 import { CROPS, type CropId } from "../content/crops";
-import type { ItemId } from "../content/items";
+import { ITEMS, type ItemId } from "../content/items";
 import type {
   GameSaveV0,
   GameSaveV1,
@@ -164,7 +164,9 @@ export class FarmGame {
     // First, fill existing stacks.
     for (const slot of this.inventorySlots) {
       if (!slot || slot.itemId !== itemId) continue;
-      const take = remaining;
+      const max = ITEMS[itemId].maxStack;
+      const space = Math.max(0, max - slot.qty);
+      const take = Math.min(space, remaining);
       slot.qty += take;
       remaining -= take;
       if (remaining <= 0) return true;
@@ -173,7 +175,8 @@ export class FarmGame {
     // Then, use empty slots.
     for (let i = 0; i < this.inventorySlots.length; i++) {
       if (this.inventorySlots[i]) continue;
-      const put = remaining;
+      const max = ITEMS[itemId].maxStack;
+      const put = Math.min(max, remaining);
       this.inventorySlots[i] = { itemId, qty: put };
       remaining -= put;
       if (remaining <= 0) return true;
@@ -204,6 +207,73 @@ export class FarmGame {
       if (slot?.itemId === itemId) total += slot.qty;
     }
     return total;
+  }
+
+  inventoryPickup(index: number): InventorySlot | null {
+    if (index < 0 || index >= this.inventorySlots.length) return null;
+    const slot = this.inventorySlots[index];
+    if (!slot) return null;
+    this.inventorySlots[index] = null;
+    return { itemId: slot.itemId, qty: slot.qty };
+  }
+
+  inventorySplitHalf(index: number): InventorySlot | null {
+    if (index < 0 || index >= this.inventorySlots.length) return null;
+    const slot = this.inventorySlots[index];
+    if (!slot) return null;
+    if (slot.qty <= 1) {
+      this.inventorySlots[index] = null;
+      return { itemId: slot.itemId, qty: slot.qty };
+    }
+    const take = Math.ceil(slot.qty / 2);
+    slot.qty -= take;
+    return { itemId: slot.itemId, qty: take };
+  }
+
+  inventoryPlace(index: number, stack: InventorySlot): InventorySlot | null {
+    if (index < 0 || index >= this.inventorySlots.length) return stack;
+    if (!stack || stack.qty <= 0) return null;
+    const max = ITEMS[stack.itemId].maxStack;
+    const current = this.inventorySlots[index];
+
+    if (!current) {
+      const put = Math.min(max, stack.qty);
+      this.inventorySlots[index] = { itemId: stack.itemId, qty: put };
+      const rem = stack.qty - put;
+      return rem > 0 ? { itemId: stack.itemId, qty: rem } : null;
+    }
+
+    if (current.itemId === stack.itemId) {
+      const space = Math.max(0, max - current.qty);
+      const put = Math.min(space, stack.qty);
+      current.qty += put;
+      const rem = stack.qty - put;
+      return rem > 0 ? { itemId: stack.itemId, qty: rem } : null;
+    }
+
+    // Swap (cursor should already be within maxStack).
+    this.inventorySlots[index] = { itemId: stack.itemId, qty: Math.min(max, stack.qty) };
+    return { itemId: current.itemId, qty: current.qty };
+  }
+
+  inventoryPlaceOne(index: number, stack: InventorySlot): { ok: boolean; remaining: InventorySlot | null } {
+    if (index < 0 || index >= this.inventorySlots.length) return { ok: false, remaining: stack };
+    if (!stack || stack.qty <= 0) return { ok: false, remaining: null };
+
+    const max = ITEMS[stack.itemId].maxStack;
+    const current = this.inventorySlots[index];
+
+    if (!current) {
+      this.inventorySlots[index] = { itemId: stack.itemId, qty: 1 };
+      const remQty = stack.qty - 1;
+      return { ok: true, remaining: remQty > 0 ? { itemId: stack.itemId, qty: remQty } : null };
+    }
+
+    if (current.itemId !== stack.itemId) return { ok: false, remaining: stack };
+    if (current.qty >= max) return { ok: false, remaining: stack };
+    current.qty += 1;
+    const remQty = stack.qty - 1;
+    return { ok: true, remaining: remQty > 0 ? { itemId: stack.itemId, qty: remQty } : null };
   }
 
   private canSpendEnergy(cost: number): boolean {
