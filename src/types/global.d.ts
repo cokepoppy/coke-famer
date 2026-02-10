@@ -14,6 +14,10 @@ declare global {
       inventory: Record<string, number>;
       inventorySlots?: Array<{ itemId: string; qty: number } | null>;
       gold?: number;
+      season?: string;
+      dayOfSeason?: number;
+      year?: number;
+      weather?: string;
       timePaused?: boolean;
       toast?: { text: string; kind: "info" | "warn" | "error"; ts: number } | null;
       tilledCount: number;

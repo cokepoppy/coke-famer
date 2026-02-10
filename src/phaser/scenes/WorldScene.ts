@@ -480,6 +480,13 @@ export class WorldScene extends Phaser.Scene {
       parsnip: this.gameState?.countItem("parsnip") ?? 0
     };
     window.__cokeFamer.gold = this.gameState?.gold ?? window.__cokeFamer.gold;
+    const cal = this.gameState?.getCalendar();
+    if (cal) {
+      window.__cokeFamer.season = cal.season;
+      window.__cokeFamer.dayOfSeason = cal.dayOfSeason;
+      window.__cokeFamer.year = cal.year;
+      window.__cokeFamer.weather = cal.weather;
+    }
     window.__cokeFamer.inventorySlots = this.gameState
       ?.getInventorySlots()
       .map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null));

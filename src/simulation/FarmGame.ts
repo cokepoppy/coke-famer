@@ -1,5 +1,6 @@
 import { CROPS, type CropId } from "../content/crops";
 import { ITEMS, type ItemId } from "../content/items";
+import { calendarFromDay, weatherForDay } from "./calendar";
 import type {
   GameSaveV0,
   GameSaveV1,
@@ -365,6 +366,8 @@ export class FarmGame {
 
   plant(tx: number, ty: number, cropId: CropId): boolean {
     const def = CROPS[cropId];
+    const { season } = calendarFromDay(this.day);
+    if (!def.seasons.includes(season)) return false;
     const state = this.getTile(tx, ty);
     if (!state.tilled) return false;
     if (state.crop) return false;
@@ -426,7 +429,37 @@ export class FarmGame {
     this.day += 1;
     this.minutes = DAY_START_MINUTES;
     this.energy = ENERGY_MAX;
+
+    // Season change can kill out-of-season crops.
+    {
+      const { season } = calendarFromDay(this.day);
+      for (const { tx, ty, state } of this.getAllTiles()) {
+        if (!state.crop) continue;
+        const def = CROPS[state.crop.cropId];
+        if (!def.seasons.includes(season)) {
+          state.crop = null;
+          this.setTile(tx, ty, state);
+        }
+      }
+    }
+
+    // Rain waters tilled soil.
+    if (weatherForDay(this.day) === "rain") {
+      for (const { tx, ty, state } of this.getAllTiles()) {
+        if (!state.tilled) continue;
+        if (state.watered) continue;
+        state.watered = true;
+        this.setTile(tx, ty, state);
+      }
+    }
+
     this.saveToStorage();
+  }
+
+  getCalendar(): { season: string; dayOfSeason: number; year: number; weather: string } {
+    const cal = calendarFromDay(this.day);
+    const weather = weatherForDay(this.day);
+    return { ...cal, weather };
   }
 }
 

@@ -32,6 +32,8 @@ export function mountHud(containerId: string): void {
 
   dayLine.innerHTML =
     `Day: <span id="hud-day">?</span> | ` +
+    `Season: <span id="hud-season">?</span> <span id="hud-dayofseason">?</span> | ` +
+    `Weather: <span id="hud-weather">?</span> | ` +
     `Time: <span id="hud-time">?</span> | ` +
     `Energy: <span id="hud-energy">?</span> | ` +
     `Gold: <span id="hud-gold">?</span> | ` +
@@ -75,6 +77,9 @@ export function mountHud(containerId: string): void {
   btnReset.onclick = () => window.__cokeFamer?.api?.reset();
 
   const hudDay = document.getElementById("hud-day")!;
+  const hudSeason = document.getElementById("hud-season")!;
+  const hudDayOfSeason = document.getElementById("hud-dayofseason")!;
+  const hudWeather = document.getElementById("hud-weather")!;
   const hudTime = document.getElementById("hud-time")!;
   const hudEnergy = document.getElementById("hud-energy")!;
   const hudGold = document.getElementById("hud-gold")!;
@@ -167,6 +172,9 @@ export function mountHud(containerId: string): void {
     const s = window.__cokeFamer;
     if (s) {
       hudDay.textContent = String(s.day);
+      hudSeason.textContent = s.season ?? "?";
+      hudDayOfSeason.textContent = s.dayOfSeason ? `Day ${s.dayOfSeason}` : "";
+      hudWeather.textContent = s.weather ?? "?";
       hudMode.textContent = s.mode;
       hudTile.textContent = `${s.player.tx},${s.player.ty}`;
       hudSeeds.textContent = String(s.inventory.parsnip_seed ?? 0);

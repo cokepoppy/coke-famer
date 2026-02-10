@@ -50,10 +50,30 @@ export function mountShopPanel(host: HTMLElement): {
   const render = () => {
     if (!open) return;
     body.innerHTML = "";
-    body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 1));
-    body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 5));
+    const season = (window.__cokeFamer as any)?.season as string | undefined;
+    if (!season) {
+      body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 1));
+      body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 5));
+      return;
+    }
+
+    if (season === "spring") {
+      body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 1));
+      body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 5));
+      body.appendChild(buyRow("Potato Seeds (50g)", "potato_seed", 1));
+      body.appendChild(buyRow("Potato Seeds (50g)", "potato_seed", 5));
+    } else if (season === "summer") {
+      body.appendChild(buyRow("Blueberry Seeds (80g)", "blueberry_seed", 1));
+      body.appendChild(buyRow("Blueberry Seeds (80g)", "blueberry_seed", 5));
+    } else if (season === "fall") {
+      body.appendChild(buyRow("Cranberry Seeds (100g)", "cranberry_seed", 1));
+      body.appendChild(buyRow("Cranberry Seeds (100g)", "cranberry_seed", 5));
+    } else {
+      const msg = el("div");
+      msg.textContent = "Shop is closed this season (demo).";
+      body.appendChild(msg);
+    }
   };
 
   return { setOpen, isOpen: () => open, render };
 }
-
