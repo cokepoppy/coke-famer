@@ -11,7 +11,8 @@
     "e2e": "npm run sync-assets && npm run build && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost playwright test",
     "preview:daemon": "node scripts/preview-daemon.mjs start",
     "preview:stop": "node scripts/preview-daemon.mjs stop",
-    "preview:status": "node scripts/preview-daemon.mjs status"
+    "preview:status": "node scripts/preview-daemon.mjs status",
+    "shots": "npm run sync-assets && npm run build && node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

@@ -2,6 +2,12 @@
 
 目标：用 HTML5/Phaser 复刻“类星露谷”的核心玩法（先做可运行 MVP 骨架）。
 
+## 截图
+
+![World](docs/screenshots/01-world.png)
+![Farming](docs/screenshots/02-farming.png)
+![Inventory](docs/screenshots/03-inventory.png)
+
 ## 运行
 
 1) 同步参考仓库资源（从 `generative_agents` 复制到本项目 `public/ga-assets`）
