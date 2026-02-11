@@ -221,3 +221,63 @@ test("crafting: gather resources -> craft fence -> place fence", async ({ page }
   expect(res.after.fence).toBeGreaterThanOrEqual(res.before.fence);
   expect(res.placed).toBeTruthy();
 });
+
+test("machine: preserves jar processes produce", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+
+    // Harvest one parsnip produce.
+    s.api.useAt(tx, ty, "hoe");
+    s.api.useAt(tx, ty, "watering_can");
+    s.api.useAt(tx, ty, "parsnip_seed");
+    for (let i = 0; i < 4; i++) {
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.sleep();
+    }
+    s.api.useAt(tx, ty, "hand");
+
+    // Gather resources for crafting.
+    const positions = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 }
+    ];
+    for (let i = 0; i < 4; i++) {
+      for (const p of positions) s.api.useAt(p.tx, p.ty, "axe");
+      for (const p of positions) s.api.useAt(p.tx, p.ty, "pickaxe");
+    }
+
+    const crafted = s.api.craft("preserves_jar", 1);
+    if (!crafted.ok) return { ok: false, step: "craft", crafted };
+
+    // Place jar near the player.
+    let pos: { tx: number; ty: number } | null = null;
+    for (const p of positions) {
+      if (s.api.useAt(p.tx, p.ty, "preserves_jar")) {
+        pos = p;
+        break;
+      }
+    }
+    if (!pos) return { ok: false, step: "place" };
+
+    const before = { out: s.inventory.parsnip_jar ?? 0 };
+
+    // Insert + sleep to finish + collect.
+    s.api.useAt(pos.tx, pos.ty, "hand");
+    s.api.sleep();
+    s.api.useAt(pos.tx, pos.ty, "hand");
+
+    const after = { out: s.inventory.parsnip_jar ?? 0 };
+    return { ok: true, before, after };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).after.out).toBeGreaterThan((res as any).before.out);
+});

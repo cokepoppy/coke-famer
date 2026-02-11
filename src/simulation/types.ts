@@ -23,7 +23,7 @@ export type InventorySlot = {
   qty: number;
 };
 
-export type PlacedObjectId = "chest" | "wood" | "stone" | "fence" | "path";
+export type PlacedObjectId = "chest" | "wood" | "stone" | "fence" | "path" | "preserves_jar";
 
 export type ChestState = {
   id: "chest";
@@ -39,7 +39,14 @@ export type SimplePlacedState = {
   id: "fence" | "path";
 };
 
-export type PlacedObjectState = ChestState | ResourceState | SimplePlacedState;
+export type PreservesJarState = {
+  id: "preserves_jar";
+  input: ItemId | null;
+  output: ItemId | null;
+  completeAtAbsMinutes: number | null;
+};
+
+export type PlacedObjectState = ChestState | ResourceState | SimplePlacedState | PreservesJarState;
 
 export type GameSaveV0 = {
   version: 0;

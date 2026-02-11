@@ -7,10 +7,15 @@ export type ItemId =
   | "blueberry"
   | "cranberry_seed"
   | "cranberry"
+  | "parsnip_jar"
+  | "potato_jar"
+  | "blueberry_jar"
+  | "cranberry_jar"
   | "wood"
   | "stone"
   | "fence"
   | "path"
+  | "preserves_jar"
   | "chest";
 
 export type ItemDef = {
@@ -30,9 +35,14 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   blueberry: { id: "blueberry", name: "Blueberry", maxStack: 999, buyPrice: null, sellPrice: 50 },
   cranberry_seed: { id: "cranberry_seed", name: "Cranberry Seeds", maxStack: 999, buyPrice: 100, sellPrice: 50 },
   cranberry: { id: "cranberry", name: "Cranberry", maxStack: 999, buyPrice: null, sellPrice: 75 },
+  parsnip_jar: { id: "parsnip_jar", name: "Pickled Parsnip", maxStack: 999, buyPrice: null, sellPrice: 80 },
+  potato_jar: { id: "potato_jar", name: "Pickled Potato", maxStack: 999, buyPrice: null, sellPrice: 120 },
+  blueberry_jar: { id: "blueberry_jar", name: "Blueberry Jam", maxStack: 999, buyPrice: null, sellPrice: 150 },
+  cranberry_jar: { id: "cranberry_jar", name: "Cranberry Jam", maxStack: 999, buyPrice: null, sellPrice: 180 },
   wood: { id: "wood", name: "Wood", maxStack: 999, buyPrice: null, sellPrice: 2 },
   stone: { id: "stone", name: "Stone", maxStack: 999, buyPrice: null, sellPrice: 2 },
   fence: { id: "fence", name: "Fence", maxStack: 999, buyPrice: null, sellPrice: 1 },
   path: { id: "path", name: "Path", maxStack: 999, buyPrice: null, sellPrice: 1 },
+  preserves_jar: { id: "preserves_jar", name: "Preserves Jar", maxStack: 999, buyPrice: null, sellPrice: 50 },
   chest: { id: "chest", name: "Chest", maxStack: 999, buyPrice: 200, sellPrice: 50 }
 };

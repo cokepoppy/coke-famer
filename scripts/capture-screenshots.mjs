@@ -196,6 +196,52 @@ async function main() {
     await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(outDir, "08-placeables.png"), fullPage: true });
 
+    // 09: preserves jar processing
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+
+      // Get one parsnip produce.
+      s.api.useAt(tx, ty, "hoe");
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.useAt(tx, ty, "parsnip_seed");
+      for (let i = 0; i < 4; i++) {
+        s.api.useAt(tx, ty, "watering_can");
+        s.api.sleep();
+      }
+      s.api.useAt(tx, ty, "hand");
+
+      // Gather resources and craft the jar.
+      const positions = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      for (let i = 0; i < 4; i++) {
+        for (const p of positions) s.api.useAt(p.tx, p.ty, "axe");
+        for (const p of positions) s.api.useAt(p.tx, p.ty, "pickaxe");
+      }
+      s.api.craft("preserves_jar", 1);
+
+      // Place the jar adjacent if possible.
+      let pos = null;
+      for (const p of positions) {
+        if (s.api.useAt(p.tx, p.ty, "preserves_jar")) {
+          pos = p;
+          break;
+        }
+      }
+      if (!pos) return;
+
+      // Insert produce and sleep to finish, leaving the output ready (green) for the screenshot.
+      s.api.useAt(pos.tx, pos.ty, "hand");
+      s.api.sleep();
+    });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "09-preserves.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

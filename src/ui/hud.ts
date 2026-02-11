@@ -62,7 +62,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "1-9: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
+  subHint.textContent = "0-9: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -200,7 +200,8 @@ export function mountHud(containerId: string): void {
       { key: "axe", label: "6 Axe" },
       { key: "pickaxe", label: "7 Pick" },
       { key: "fence", label: `8 Fence (${inventory.fence ?? 0})` },
-      { key: "path", label: `9 Path (${inventory.path ?? 0})` }
+      { key: "path", label: `9 Path (${inventory.path ?? 0})` },
+      { key: "preserves_jar", label: `0 Jar (${inventory.preserves_jar ?? 0})` }
     ];
     hudHotbar.innerHTML = "";
     for (const e of entries) {

@@ -27,6 +27,8 @@ const WOOD_NODE_HP = 3;
 const STONE_NODE_HP = 3;
 const WOOD_NODE_DROP = 5;
 const STONE_NODE_DROP = 5;
+const MINUTES_PER_DAY = 24 * 60;
+const PRESERVES_MINUTES = 180;
 
 const ACTION_MINUTES = {
   hoe: 10,
@@ -213,6 +215,53 @@ export class FarmGame {
     return out;
   }
 
+  getAbsMinutes(): number {
+    return (this.day - 1) * MINUTES_PER_DAY + this.minutes;
+  }
+
+  refreshDerivedState(): void {
+    this.updateMachines();
+  }
+
+  advanceMinutes(delta: number): void {
+    if (!Number.isFinite(delta) || delta <= 0) return;
+    this.minutes += delta;
+    this.updateMachines();
+  }
+
+  private updateMachines(): void {
+    const now = this.getAbsMinutes();
+    for (const obj of this.objects.values()) {
+      if (obj.id !== "preserves_jar") continue;
+      if (!obj.completeAtAbsMinutes || obj.completeAtAbsMinutes > now) continue;
+      if (!obj.input) {
+        obj.completeAtAbsMinutes = null;
+        continue;
+      }
+      if (obj.output) {
+        obj.completeAtAbsMinutes = null;
+        continue;
+      }
+      const out = this.preservesOutputFor(obj.input);
+      if (!out) {
+        obj.input = null;
+        obj.completeAtAbsMinutes = null;
+        continue;
+      }
+      obj.output = out;
+      obj.input = null;
+      obj.completeAtAbsMinutes = null;
+    }
+  }
+
+  private preservesOutputFor(input: ItemId): ItemId | null {
+    if (input === "parsnip") return "parsnip_jar";
+    if (input === "potato") return "potato_jar";
+    if (input === "blueberry") return "blueberry_jar";
+    if (input === "cranberry") return "cranberry_jar";
+    return null;
+  }
+
   placeChest(tx: number, ty: number): boolean {
     const key = tileKey(tx, ty);
     if (this.objects.has(key)) return false;
@@ -231,6 +280,63 @@ export class FarmGame {
     const nodeHp = hp ?? (kind === "wood" ? WOOD_NODE_HP : STONE_NODE_HP);
     this.objects.set(key, { id: kind, hp: Math.max(1, nodeHp) });
     return true;
+  }
+
+  placePreservesJar(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop || t.tilled || t.watered) return false;
+    if (!this.consumeItem("preserves_jar", 1)) return false;
+    this.objects.set(key, { id: "preserves_jar", input: null, output: null, completeAtAbsMinutes: null });
+    return true;
+  }
+
+  interactPreservesJar(tx: number, ty: number): { ok: boolean; reason?: string } {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "preserves_jar") return { ok: false, reason: "not_a_jar" };
+
+    this.updateMachines();
+
+    if (obj.output) {
+      const out = obj.output;
+      if (!this.canAddItem(out, 1)) return { ok: false, reason: "inv_full" };
+      const added = this.addItem(out, 1);
+      if (!added) return { ok: false, reason: "inv_full" };
+      obj.output = null;
+      return { ok: true };
+    }
+
+    if (obj.input && obj.completeAtAbsMinutes) return { ok: false, reason: "processing" };
+
+    const candidates: ItemId[] = ["parsnip", "potato", "blueberry", "cranberry"];
+    const input = candidates.find((id) => this.countItem(id) > 0) ?? null;
+    if (!input) return { ok: false, reason: "no_input" };
+    const out = this.preservesOutputFor(input);
+    if (!out) return { ok: false, reason: "bad_input" };
+    const ok = this.consumeItem(input, 1);
+    if (!ok) return { ok: false, reason: "no_input" };
+    obj.input = input;
+    obj.output = null;
+    obj.completeAtAbsMinutes = this.getAbsMinutes() + PRESERVES_MINUTES;
+    return { ok: true };
+  }
+
+  pickupPreservesJarIfIdle(tx: number, ty: number): { ok: boolean; reason?: string } {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "preserves_jar") return { ok: false, reason: "not_a_jar" };
+    this.updateMachines();
+    if (obj.input || obj.output || obj.completeAtAbsMinutes) return { ok: false, reason: "busy" };
+
+    this.objects.delete(key);
+    const added = this.addItem("preserves_jar", 1);
+    if (!added) {
+      this.objects.set(key, obj);
+      return { ok: false, reason: "inv_full" };
+    }
+    return { ok: true };
   }
 
   placeSimpleObject(tx: number, ty: number, id: "fence" | "path"): boolean {
@@ -538,7 +644,7 @@ export class FarmGame {
   }
 
   private spend(action: keyof typeof ACTION_MINUTES): void {
-    this.minutes += ACTION_MINUTES[action];
+    this.advanceMinutes(ACTION_MINUTES[action]);
     this.energy = Math.max(0, this.energy - ACTION_ENERGY[action]);
   }
 
@@ -637,6 +743,7 @@ export class FarmGame {
   }
 
   sleepNextDay(): void {
+    this.updateMachines();
     // Grow crops if watered.
     for (const { tx, ty, state } of this.getAllTiles()) {
       if (!state.crop) continue;
@@ -665,6 +772,7 @@ export class FarmGame {
     this.day += 1;
     this.minutes = DAY_START_MINUTES;
     this.energy = ENERGY_MAX;
+    this.updateMachines();
 
     // Season change can kill out-of-season crops.
     {

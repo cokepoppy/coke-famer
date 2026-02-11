@@ -283,6 +283,7 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "7") this.setMode("pickaxe");
       if (ev.key === "8") this.setMode("fence" as any);
       if (ev.key === "9") this.setMode("path" as any);
+      if (ev.key === "0") this.setMode("preserves_jar" as any);
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -293,6 +294,7 @@ export class WorldScene extends Phaser.Scene {
     this.drawReticle(this.input.activePointer);
 
     if (this.isFreshGame) this.seedDemoResources();
+    this.gameState.refreshDerivedState();
     this.gameState.saveToStorage();
     this.redrawAllObjects();
 
@@ -325,6 +327,7 @@ export class WorldScene extends Phaser.Scene {
           const loaded = FarmGame.loadFromStorage();
           if (loaded) this.gameState = loaded;
           this.activeChest = null;
+          this.gameState.refreshDerivedState();
           this.redrawAllFarmTiles();
           this.redrawAllObjects();
           this.syncWindowState();
@@ -334,6 +337,7 @@ export class WorldScene extends Phaser.Scene {
           this.activeChest = null;
           this.redrawAllFarmTiles();
           this.seedDemoResources();
+          this.gameState.refreshDerivedState();
           this.redrawAllObjects();
           this.gameState.saveToStorage();
           this.syncWindowState();
@@ -573,10 +577,15 @@ export class WorldScene extends Phaser.Scene {
       potato_seed: this.gameState?.countItem("potato_seed" as any) ?? 0,
       blueberry_seed: this.gameState?.countItem("blueberry_seed" as any) ?? 0,
       cranberry_seed: this.gameState?.countItem("cranberry_seed" as any) ?? 0,
+      parsnip_jar: this.gameState?.countItem("parsnip_jar" as any) ?? 0,
+      potato_jar: this.gameState?.countItem("potato_jar" as any) ?? 0,
+      blueberry_jar: this.gameState?.countItem("blueberry_jar" as any) ?? 0,
+      cranberry_jar: this.gameState?.countItem("cranberry_jar" as any) ?? 0,
       wood: this.gameState?.countItem("wood" as any) ?? 0,
       stone: this.gameState?.countItem("stone" as any) ?? 0,
       fence: this.gameState?.countItem("fence" as any) ?? 0,
       path: this.gameState?.countItem("path" as any) ?? 0,
+      preserves_jar: this.gameState?.countItem("preserves_jar" as any) ?? 0,
       chest: this.gameState?.countItem("chest" as any) ?? 0
     };
     window.__cokeFamer.gold = this.gameState?.gold ?? window.__cokeFamer.gold;
@@ -777,7 +786,7 @@ export class WorldScene extends Phaser.Scene {
 
     const cropIdFromSeed = Object.values(CROPS).find((c) => c.seedItemId === this.mode)?.id ?? null;
     const isSeedMode = Boolean(cropIdFromSeed);
-    const isPlaceableMode = this.mode === "fence" || this.mode === "path";
+    const isPlaceableMode = this.mode === "fence" || this.mode === "path" || this.mode === "preserves_jar";
 
     if (
       this.mode === "hoe" ||
@@ -814,6 +823,7 @@ export class WorldScene extends Phaser.Scene {
     else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
     else if (this.mode === "fence") ok = this.gameState.placeSimpleObject(tx, ty, "fence");
     else if (this.mode === "path") ok = this.gameState.placeSimpleObject(tx, ty, "path");
+    else if (this.mode === "preserves_jar") ok = this.gameState.placePreservesJar(tx, ty);
     else if ((this.mode as ToolId) === "axe") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
@@ -840,6 +850,12 @@ export class WorldScene extends Phaser.Scene {
       if (obj?.id === "path") {
         ok = this.gameState.pickupSimpleObject(tx, ty, "path");
         if (ok) this.toast("Picked up path", "info");
+      } else if (obj?.id === "preserves_jar") {
+        const res = this.gameState.pickupPreservesJarIfIdle(tx, ty);
+        ok = res.ok;
+        if (ok) this.toast("Picked up jar", "info");
+        else if (res.reason === "busy") this.toast("Jar is busy", "warn");
+        else if (res.reason === "inv_full") this.toast("Inventory full", "warn");
       } else {
         ok = this.gameState.mine(tx, ty);
       }
@@ -850,6 +866,14 @@ export class WorldScene extends Phaser.Scene {
         this.activeChest = { tx, ty };
         this.toast("Chest opened (press I to manage items)", "info");
         ok = true;
+      } else if (obj?.id === "preserves_jar") {
+        const res = this.gameState.interactPreservesJar(tx, ty);
+        ok = res.ok;
+        if (ok) this.toast("Jar updated", "info");
+        else if (res.reason === "processing") this.toast("Jar is processing", "warn");
+        else if (res.reason === "no_input") this.toast("No produce to insert", "warn");
+        else if (res.reason === "inv_full") this.toast("Inventory full", "warn");
+        else this.toast("Jar action failed", "warn");
       } else {
         ok = this.gameState.harvest(tx, ty);
       }
@@ -914,6 +938,19 @@ export class WorldScene extends Phaser.Scene {
         rect.setDepth(ENTITY_DEPTH_BASE + y);
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+      } else if (o.obj.id === "preserves_jar") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const state = o.obj as any;
+        const hasOutput = Boolean(state.output);
+        const isProcessing = Boolean(state.completeAtAbsMinutes) || Boolean(state.input);
+        const color = hasOutput ? 0x4cd964 : isProcessing ? 0xffc107 : 0x5a78c8;
+        const rect = this.add.rectangle(x + 6, y + 8, TILE_SIZE - 12, TILE_SIZE - 12, color, 0.92).setOrigin(0);
+        rect.setStrokeStyle(1, 0x1f2630, 0.7);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 12, TILE_SIZE - 12, 0, 0);
       }
     }
   }
@@ -940,7 +977,7 @@ export class WorldScene extends Phaser.Scene {
     let advanced = false;
     while (this.timeAccumulatorMs >= this.msPerMinute) {
       this.timeAccumulatorMs -= this.msPerMinute;
-      this.gameState.minutes += 1;
+      this.gameState.advanceMinutes(1);
       advanced = true;
       if (this.gameState.minutes >= GAME_CONSTANTS.DAY_END_MINUTES) {
         this.toast("2:00 AM — You passed out. New day.", "warn");
