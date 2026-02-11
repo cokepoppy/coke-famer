@@ -29,6 +29,7 @@ const WOOD_NODE_DROP = 5;
 const STONE_NODE_DROP = 5;
 const MINUTES_PER_DAY = 24 * 60;
 const PRESERVES_MINUTES = 180;
+const SHIPPING_BIN_SIZE = 24;
 
 const ACTION_MINUTES = {
   hoe: 10,
@@ -260,6 +261,68 @@ export class FarmGame {
     if (input === "blueberry") return "blueberry_jar";
     if (input === "cranberry") return "cranberry_jar";
     return null;
+  }
+
+  private getShippingBinRef(): Array<InventorySlot | null> | null {
+    for (const obj of this.objects.values()) {
+      if (obj.id === "shipping_bin") return (obj as any).slots as Array<InventorySlot | null>;
+    }
+    return null;
+  }
+
+  ensureShippingBinAt(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop || t.tilled || t.watered) return false;
+    this.objects.set(key, { id: "shipping_bin", slots: Array.from({ length: SHIPPING_BIN_SIZE }, () => null) } as any);
+    return true;
+  }
+
+  getShippingBinSlots(): ReadonlyArray<InventorySlot | null> {
+    const slots = this.getShippingBinRef();
+    return slots ? slots.slice() : [];
+  }
+
+  shippingPickup(index: number): InventorySlot | null {
+    const slots = this.getShippingBinRef();
+    if (!slots) return null;
+    return this.opsPickup(slots, index);
+  }
+
+  shippingSplitHalf(index: number): InventorySlot | null {
+    const slots = this.getShippingBinRef();
+    if (!slots) return null;
+    return this.opsSplitHalf(slots, index);
+  }
+
+  shippingPlace(index: number, stack: InventorySlot): InventorySlot | null {
+    const slots = this.getShippingBinRef();
+    if (!slots) return stack;
+    return this.opsPlace(slots, index, stack);
+  }
+
+  shippingPlaceOne(index: number, stack: InventorySlot): { ok: boolean; remaining: InventorySlot | null } {
+    const slots = this.getShippingBinRef();
+    if (!slots) return { ok: false, remaining: stack };
+    return this.opsPlaceOne(slots, index, stack);
+  }
+
+  sellShippingBin(): { goldGained: number; itemsSold: number } {
+    const slots = this.getShippingBinRef();
+    if (!slots) return { goldGained: 0, itemsSold: 0 };
+    let goldGained = 0;
+    let itemsSold = 0;
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      if (!slot) continue;
+      const def = ITEMS[slot.itemId];
+      goldGained += def.sellPrice * slot.qty;
+      itemsSold += slot.qty;
+      slots[i] = null;
+    }
+    this.gold += goldGained;
+    return { goldGained, itemsSold };
   }
 
   placeChest(tx: number, ty: number): boolean {
@@ -742,8 +805,9 @@ export class FarmGame {
     return true;
   }
 
-  sleepNextDay(): void {
+  sleepNextDay(): { shipped: { goldGained: number; itemsSold: number } } {
     this.updateMachines();
+    const shipped = this.sellShippingBin();
     // Grow crops if watered.
     for (const { tx, ty, state } of this.getAllTiles()) {
       if (!state.crop) continue;
@@ -798,6 +862,7 @@ export class FarmGame {
     }
 
     this.saveToStorage();
+    return { shipped };
   }
 
   getCalendar(): { season: string; dayOfSeason: number; year: number; weather: string } {

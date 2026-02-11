@@ -41,6 +41,10 @@ export class WorldScene extends Phaser.Scene {
   private timeAccumulatorMs = 0;
   private readonly msPerMinute = 700; // ~Stardew: 10 minutes per 7 seconds
   private activeChest: { tx: number; ty: number } | null = null;
+  private activeContainer:
+    | { kind: "chest"; tx: number; ty: number }
+    | { kind: "shipping_bin"; tx: number; ty: number }
+    | null = null;
   private objectLayer!: Phaser.GameObjects.Layer;
   private objectVisuals = new Map<string, Phaser.GameObjects.Rectangle>();
   private objectBodies!: Phaser.GameObjects.Group;
@@ -294,6 +298,7 @@ export class WorldScene extends Phaser.Scene {
     this.drawReticle(this.input.activePointer);
 
     if (this.isFreshGame) this.seedDemoResources();
+    this.ensureShippingBin();
     this.gameState.refreshDerivedState();
     this.gameState.saveToStorage();
     this.redrawAllObjects();
@@ -315,9 +320,11 @@ export class WorldScene extends Phaser.Scene {
       lastAction: null,
       api: {
         sleep: () => {
-          this.gameState.sleepNextDay();
+          const res = this.gameState.sleepNextDay();
+          if (res.shipped.goldGained > 0) this.toast(`Shipped +${res.shipped.goldGained}g`, "info");
           this.redrawAllFarmTiles();
           this.syncWindowState();
+          return res;
         },
         save: () => {
           this.gameState.saveToStorage();
@@ -327,6 +334,8 @@ export class WorldScene extends Phaser.Scene {
           const loaded = FarmGame.loadFromStorage();
           if (loaded) this.gameState = loaded;
           this.activeChest = null;
+          this.activeContainer = null;
+          this.ensureShippingBin();
           this.gameState.refreshDerivedState();
           this.redrawAllFarmTiles();
           this.redrawAllObjects();
@@ -335,8 +344,10 @@ export class WorldScene extends Phaser.Scene {
         reset: () => {
           this.gameState.resetToNewGame();
           this.activeChest = null;
+          this.activeContainer = null;
           this.redrawAllFarmTiles();
           this.seedDemoResources();
+          this.ensureShippingBin();
           this.gameState.refreshDerivedState();
           this.redrawAllObjects();
           this.gameState.saveToStorage();
@@ -411,12 +422,14 @@ export class WorldScene extends Phaser.Scene {
           const obj = this.gameState.getObject(tx, ty);
           if (!obj || obj.id !== "chest") return false;
           this.activeChest = { tx, ty };
+          this.activeContainer = { kind: "chest", tx, ty };
           this.toast("Chest opened", "info");
           this.syncWindowState();
           return true;
         },
         closeChest: () => {
           this.activeChest = null;
+          this.activeContainer = null;
           this.syncWindowState();
         },
         chestPickup: (index: number) => {
@@ -449,6 +462,74 @@ export class WorldScene extends Phaser.Scene {
             ok: res.ok,
             remaining: res.remaining ? { itemId: res.remaining.itemId, qty: res.remaining.qty } : null
           };
+        },
+        containerPickup: (index: number) => {
+          if (!this.activeContainer) return null;
+          if (this.activeContainer.kind === "chest") {
+            const picked = this.gameState.chestPickup(this.activeContainer.tx, this.activeContainer.ty, index);
+            this.gameState.saveToStorage();
+            this.syncWindowState();
+            return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+          }
+          const picked = this.gameState.shippingPickup(index);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+        },
+        containerSplitHalf: (index: number) => {
+          if (!this.activeContainer) return null;
+          if (this.activeContainer.kind === "chest") {
+            const picked = this.gameState.chestSplitHalf(this.activeContainer.tx, this.activeContainer.ty, index);
+            this.gameState.saveToStorage();
+            this.syncWindowState();
+            return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+          }
+          const picked = this.gameState.shippingSplitHalf(index);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+        },
+        containerPlace: (index: number, stack: { itemId: string; qty: number }) => {
+          if (!this.activeContainer) return stack as any;
+          if (this.activeContainer.kind === "chest") {
+            const rem = this.gameState.chestPlace(this.activeContainer.tx, this.activeContainer.ty, index, stack as any);
+            this.gameState.saveToStorage();
+            this.syncWindowState();
+            return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
+          }
+          const rem = this.gameState.shippingPlace(index, stack as any);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
+        },
+        containerPlaceOne: (index: number, stack: { itemId: string; qty: number }) => {
+          if (!this.activeContainer) return { ok: false, remaining: stack as any };
+          if (this.activeContainer.kind === "chest") {
+            const res = this.gameState.chestPlaceOne(this.activeContainer.tx, this.activeContainer.ty, index, stack as any);
+            this.gameState.saveToStorage();
+            this.syncWindowState();
+            return {
+              ok: res.ok,
+              remaining: res.remaining ? { itemId: res.remaining.itemId, qty: res.remaining.qty } : null
+            };
+          }
+          const res = this.gameState.shippingPlaceOne(index, stack as any);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return {
+            ok: res.ok,
+            remaining: res.remaining ? { itemId: res.remaining.itemId, qty: res.remaining.qty } : null
+          };
+        },
+        openShipping: () => {
+          this.activeContainer = { kind: "shipping_bin", tx: -1, ty: -1 };
+          this.toast("Shipping bin opened (press I to manage items)", "info");
+          this.syncWindowState();
+        },
+        closeContainer: () => {
+          this.activeContainer = null;
+          this.activeChest = null;
+          this.syncWindowState();
         }
       }
     };
@@ -602,15 +683,24 @@ export class WorldScene extends Phaser.Scene {
     window.__cokeFamer.timePaused = this.timePaused;
     window.__cokeFamer.selectedSeed = this.selectedSeed;
 
-    if (this.activeChest) {
-      const slots = this.gameState.getChestSlots(this.activeChest.tx, this.activeChest.ty) ?? [];
-      window.__cokeFamer.chest = {
-        tx: this.activeChest.tx,
-        ty: this.activeChest.ty,
-        slots: slots.map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null))
-      };
+    if (this.activeContainer) {
+      if (this.activeContainer.kind === "chest") {
+        const slots = this.gameState.getChestSlots(this.activeContainer.tx, this.activeContainer.ty) ?? [];
+        window.__cokeFamer.container = {
+          kind: "chest",
+          tx: this.activeContainer.tx,
+          ty: this.activeContainer.ty,
+          slots: slots.map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null))
+        };
+      } else {
+        const slots = this.gameState.getShippingBinSlots() ?? [];
+        window.__cokeFamer.container = {
+          kind: "shipping_bin",
+          slots: slots.map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null))
+        };
+      }
     } else {
-      window.__cokeFamer.chest = null;
+      window.__cokeFamer.container = null;
     }
   }
 
@@ -646,7 +736,7 @@ export class WorldScene extends Phaser.Scene {
     this.toast("No seeds to cycle", "warn");
   }
 
-	  private seedDemoResources(): void {
+  private seedDemoResources(): void {
 	    // Don't auto-seed if the player already has any non-chest objects (avoid surprising existing saves).
 	    const hasNonChest = this.gameState.getAllObjects().some((o) => o.obj.id !== "chest");
 	    if (hasNonChest) return;
@@ -772,6 +862,29 @@ export class WorldScene extends Phaser.Scene {
     placeMany("stone", 6);
   }
 
+  private ensureShippingBin(): void {
+    const existing = this.gameState.getAllObjects().some((o) => o.obj.id === "shipping_bin");
+    if (existing) return;
+
+    const base = { tx: this.playerTile.tx, ty: this.playerTile.ty };
+    const candidates = [
+      { tx: base.tx + 2, ty: base.ty },
+      { tx: base.tx - 2, ty: base.ty },
+      { tx: base.tx, ty: base.ty + 2 },
+      { tx: base.tx, ty: base.ty - 2 },
+      { tx: base.tx + 3, ty: base.ty },
+      { tx: base.tx, ty: base.ty + 3 }
+    ];
+
+    for (const c of candidates) {
+      if (c.tx < 0 || c.ty < 0 || c.tx >= this.map.width || c.ty >= this.map.height) continue;
+      const blocked = this.collisionsLayer.getTileAt(c.tx, c.ty, true);
+      const isBlocked = Boolean(blocked?.properties?.collide);
+      if (isBlocked) continue;
+      if (this.gameState.ensureShippingBinAt(c.tx, c.ty)) return;
+    }
+  }
+
   private applyActionAt(tx: number, ty: number): boolean {
     const blocked = this.collisionsLayer.getTileAt(tx, ty, true);
     const isBlocked = Boolean(blocked?.properties?.collide);
@@ -842,6 +955,9 @@ export class WorldScene extends Phaser.Scene {
       } else if (obj?.id === "fence") {
         ok = this.gameState.pickupSimpleObject(tx, ty, "fence");
         if (ok) this.toast("Picked up fence", "info");
+      } else if (obj?.id === "shipping_bin") {
+        this.toast("Shipping bin can't be picked up", "warn");
+        ok = false;
       } else {
         ok = this.gameState.chop(tx, ty);
       }
@@ -864,7 +980,13 @@ export class WorldScene extends Phaser.Scene {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
         this.activeChest = { tx, ty };
+        this.activeContainer = { kind: "chest", tx, ty };
         this.toast("Chest opened (press I to manage items)", "info");
+        ok = true;
+      } else if (obj?.id === "shipping_bin") {
+        this.activeChest = null;
+        this.activeContainer = { kind: "shipping_bin", tx, ty };
+        this.toast("Shipping bin opened (press I to manage items)", "info");
         ok = true;
       } else if (obj?.id === "preserves_jar") {
         const res = this.gameState.interactPreservesJar(tx, ty);
@@ -951,6 +1073,15 @@ export class WorldScene extends Phaser.Scene {
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
         this.addObjectBody(o.tx, o.ty, TILE_SIZE - 12, TILE_SIZE - 12, 0, 0);
+      } else if (o.obj.id === "shipping_bin") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 2, y + 6, TILE_SIZE - 4, TILE_SIZE - 8, 0x2f80ed, 0.92).setOrigin(0);
+        rect.setStrokeStyle(1, 0x163a6b, 0.8);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 8, TILE_SIZE - 10, 4, 8);
       }
     }
   }
@@ -981,7 +1112,8 @@ export class WorldScene extends Phaser.Scene {
       advanced = true;
       if (this.gameState.minutes >= GAME_CONSTANTS.DAY_END_MINUTES) {
         this.toast("2:00 AM — You passed out. New day.", "warn");
-        this.gameState.sleepNextDay();
+        const res = this.gameState.sleepNextDay();
+        if (res.shipped.goldGained > 0) this.toast(`Shipped +${res.shipped.goldGained}g`, "info");
         this.redrawAllFarmTiles();
         break;
       }

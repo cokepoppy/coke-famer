@@ -171,8 +171,8 @@ test("chest: store items and persist across reload", async ({ page }) => {
     const s = (window as any).__cokeFamer;
     const ok = s.api.openChestAt(pos.tx, pos.ty);
     if (!ok) return null;
-    const chest = s.chest;
-    return chest?.slots?.[0] ?? null;
+    const c = s.container;
+    return c?.slots?.[0] ?? null;
   }, (placed as any).pos);
 
   expect(chestSlot0).toBeTruthy();
@@ -280,4 +280,54 @@ test("machine: preserves jar processes produce", async ({ page }) => {
 
   expect(res.ok).toBeTruthy();
   expect((res as any).after.out).toBeGreaterThan((res as any).before.out);
+});
+
+test("shipping: put produce in shipping bin and sell overnight", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+
+    // Harvest one parsnip.
+    s.api.useAt(tx, ty, "hoe");
+    s.api.useAt(tx, ty, "watering_can");
+    s.api.useAt(tx, ty, "parsnip_seed");
+    for (let i = 0; i < 4; i++) {
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.sleep();
+    }
+    s.api.useAt(tx, ty, "hand");
+
+    const gold0 = s.gold ?? 0;
+
+    // Move parsnip into shipping bin.
+    s.api.openShipping();
+    const invSlots = s.inventorySlots ?? [];
+    const idx = invSlots.findIndex((it: any) => it?.itemId === "parsnip");
+    if (idx < 0) return { ok: false, step: "no_parsnip" };
+    const picked = s.api.invPickup(idx);
+    if (!picked) return { ok: false, step: "pickup" };
+    const rem = s.api.containerPlace(0, picked);
+    if (rem) return { ok: false, step: "place" };
+
+    // Sleep sells overnight.
+    const shipped = s.api.sleep().shipped;
+    const gold1 = s.gold ?? 0;
+
+    // After selling, shipping bin should be empty.
+    s.api.openShipping();
+    const c = s.container;
+    const nonEmpty = (c?.slots ?? []).some((x: any) => Boolean(x));
+
+    return { ok: true, shipped, gold0, gold1, nonEmpty };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).shipped.goldGained).toBeGreaterThan(0);
+  expect((res as any).gold1).toBeGreaterThan((res as any).gold0);
+  expect((res as any).nonEmpty).toBeFalsy();
 });

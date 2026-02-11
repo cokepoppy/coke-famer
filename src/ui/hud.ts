@@ -125,7 +125,7 @@ export function mountHud(containerId: string): void {
   };
   const closeInventory = () => {
     setInvOpen(false);
-    window.__cokeFamer?.api?.closeChest();
+    window.__cokeFamer?.api?.closeContainer();
     if (invPausedByUi) {
       invPausedByUi = false;
       window.__cokeFamer?.api?.setPaused(false);

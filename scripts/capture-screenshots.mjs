@@ -242,6 +242,35 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "09-preserves.png"), fullPage: true });
 
+    // 10: shipping bin (move produce into shipping container)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+
+      // Harvest one parsnip produce.
+      s.api.useAt(tx, ty, "hoe");
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.useAt(tx, ty, "parsnip_seed");
+      for (let i = 0; i < 4; i++) {
+        s.api.useAt(tx, ty, "watering_can");
+        s.api.sleep();
+      }
+      s.api.useAt(tx, ty, "hand");
+
+      s.api.openShipping();
+
+      const invSlots = s.inventorySlots ?? [];
+      const idx = invSlots.findIndex((it) => it?.itemId === "parsnip");
+      if (idx >= 0) {
+        const picked = s.api.invPickup(idx);
+        if (picked) s.api.containerPlace(0, picked);
+      }
+    });
+    await page.keyboard.press("i");
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "10-shipping.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

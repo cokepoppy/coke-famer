@@ -21,12 +21,12 @@ declare global {
       selectedSeed?: string;
       timePaused?: boolean;
       toast?: { text: string; kind: "info" | "warn" | "error"; ts: number } | null;
-      chest?: { tx: number; ty: number; slots: Array<{ itemId: string; qty: number } | null> } | null;
+      container?: { kind: string; tx?: number; ty?: number; slots: Array<{ itemId: string; qty: number } | null> } | null;
       tilledCount: number;
       lastClick: { tx: number; ty: number; blocked: boolean; toggled: boolean } | null;
       lastAction: { kind: string; ok: boolean; tx: number; ty: number } | null;
       api?: {
-        sleep: () => void;
+        sleep: () => { shipped: { goldGained: number; itemsSold: number } };
         save: () => void;
         load: () => void;
         reset: () => void;
@@ -52,6 +52,15 @@ declare global {
           index: number,
           stack: { itemId: string; qty: number }
         ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
+        containerPickup: (index: number) => { itemId: string; qty: number } | null;
+        containerSplitHalf: (index: number) => { itemId: string; qty: number } | null;
+        containerPlace: (index: number, stack: { itemId: string; qty: number }) => { itemId: string; qty: number } | null;
+        containerPlaceOne: (
+          index: number,
+          stack: { itemId: string; qty: number }
+        ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
+        openShipping: () => void;
+        closeContainer: () => void;
       };
     };
   }

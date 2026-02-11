@@ -38,7 +38,7 @@ export function mountInventoryPanel(host: HTMLElement): {
   const chestHeader = el("div", "chest-header");
   const chestTitle = el("div", "chest-title");
   const chestClose = el("button", "btn");
-  chestClose.textContent = "Close Chest";
+  chestClose.textContent = "Close Container";
   chestHeader.appendChild(chestTitle);
   chestHeader.appendChild(chestClose);
   chestWrap.appendChild(chestHeader);
@@ -73,14 +73,16 @@ export function mountInventoryPanel(host: HTMLElement): {
   };
   syncCursorLine();
 
-  type Container = "inv" | "chest";
+  type Container = "inv" | "container";
   const leftClick = (container: Container, slotIndex: number) => {
     const api = window.__cokeFamer?.api;
     if (!api) return;
 
     if (!cursor) {
       cursor =
-        container === "inv" ? ((api.invPickup(slotIndex) as any) ?? null) : ((api.chestPickup(slotIndex) as any) ?? null);
+        container === "inv"
+          ? ((api.invPickup(slotIndex) as any) ?? null)
+          : ((api.containerPickup(slotIndex) as any) ?? null);
       syncCursorLine();
       return;
     }
@@ -88,7 +90,7 @@ export function mountInventoryPanel(host: HTMLElement): {
     const res =
       container === "inv"
         ? (api.invPlace(slotIndex, cursor as any) as any)
-        : (api.chestPlace(slotIndex, cursor as any) as any);
+        : (api.containerPlace(slotIndex, cursor as any) as any);
     // If place returned a different item, that's a swap; otherwise it's remainder.
     cursor = res;
     syncCursorLine();
@@ -102,7 +104,7 @@ export function mountInventoryPanel(host: HTMLElement): {
       cursor =
         container === "inv"
           ? ((api.invSplitHalf(slotIndex) as any) ?? null)
-          : ((api.chestSplitHalf(slotIndex) as any) ?? null);
+          : ((api.containerSplitHalf(slotIndex) as any) ?? null);
       syncCursorLine();
       return;
     }
@@ -110,7 +112,7 @@ export function mountInventoryPanel(host: HTMLElement): {
     const placed =
       container === "inv"
         ? (api.invPlaceOne(slotIndex, cursor as any) as any)
-        : (api.chestPlaceOne(slotIndex, cursor as any) as any);
+        : (api.containerPlaceOne(slotIndex, cursor as any) as any);
     cursor = placed.remaining;
     syncCursorLine();
   };
@@ -123,7 +125,7 @@ export function mountInventoryPanel(host: HTMLElement): {
   };
 
   chestClose.onclick = () => {
-    window.__cokeFamer?.api?.closeChest();
+    window.__cokeFamer?.api?.closeContainer();
   };
 
   const render = () => {
@@ -156,13 +158,15 @@ export function mountInventoryPanel(host: HTMLElement): {
       invGrid.appendChild(cell);
     }
 
-    const chest = (window.__cokeFamer as any)?.chest as
-      | { tx: number; ty: number; slots: Array<InventorySlot | null> }
+    const chest = (window.__cokeFamer as any)?.container as
+      | { kind: string; tx?: number; ty?: number; slots: Array<InventorySlot | null> }
       | null
       | undefined;
     if (chest && Array.isArray(chest.slots)) {
       chestWrap.style.display = "block";
-      chestTitle.textContent = `Chest @ ${chest.tx},${chest.ty}`;
+      const label =
+        chest.kind === "shipping_bin" ? "Shipping Bin" : chest.kind === "chest" ? `Chest @ ${chest.tx},${chest.ty}` : chest.kind;
+      chestTitle.textContent = label;
       chestGrid.innerHTML = "";
       const cs = chest.slots;
       for (let i = 0; i < Math.max(24, cs.length); i++) {
@@ -178,8 +182,8 @@ export function mountInventoryPanel(host: HTMLElement): {
           qty.textContent = "";
         }
         cell.onmousedown = (ev) => {
-          if (ev.button === 2) rightClick("chest", i);
-          else leftClick("chest", i);
+          if (ev.button === 2) rightClick("container", i);
+          else leftClick("container", i);
         };
         stopContextMenu(cell);
         cell.appendChild(name);
