@@ -629,6 +629,32 @@ export class WorldScene extends Phaser.Scene {
 
     const base = { tx: this.playerTile.tx, ty: this.playerTile.ty };
 
+    const tryPlaceNear = (kind: "wood" | "stone", preferred: Array<{ tx: number; ty: number }>) => {
+      for (const c of preferred) {
+        if (c.tx < 0 || c.ty < 0 || c.tx >= this.map.width || c.ty >= this.map.height) continue;
+        const blocked = this.collisionsLayer.getTileAt(c.tx, c.ty, true);
+        const isBlocked = Boolean(blocked?.properties?.collide);
+        if (isBlocked) continue;
+        if (c.tx === base.tx && c.ty === base.ty) continue;
+        if (this.gameState.placeResource(c.tx, c.ty, kind)) return true;
+      }
+      return false;
+    };
+
+    // Place at least one of each near the player for the demo UX (deterministic screenshots + discoverability).
+    tryPlaceNear("wood", [
+      { tx: base.tx + 1, ty: base.ty },
+      { tx: base.tx, ty: base.ty + 1 },
+      { tx: base.tx - 1, ty: base.ty },
+      { tx: base.tx, ty: base.ty - 1 }
+    ]);
+    tryPlaceNear("stone", [
+      { tx: base.tx - 1, ty: base.ty },
+      { tx: base.tx, ty: base.ty - 1 },
+      { tx: base.tx + 1, ty: base.ty },
+      { tx: base.tx, ty: base.ty + 1 }
+    ]);
+
     const candidates: Array<{ tx: number; ty: number }> = [];
     const maxDist = 10;
     for (let d = 3; d <= maxDist; d++) {

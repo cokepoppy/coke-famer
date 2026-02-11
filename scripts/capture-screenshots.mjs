@@ -63,14 +63,17 @@ async function main() {
     await page.waitForSelector("#game-container canvas");
     await page.waitForFunction(() => (window).__cokeFamer?.ready === true);
 
-    // Stabilize state.
-    await page.locator("#btn-reset").click();
-    await page.waitForTimeout(200);
+    const reset = async () => {
+      await page.locator("#btn-reset").click();
+      await page.waitForTimeout(250);
+    };
 
     // 01: world + HUD
+    await reset();
     await page.screenshot({ path: path.join(outDir, "01-world.png"), fullPage: true });
 
     // 02: farming (mature crop)
+    await reset();
     await page.evaluate(() => {
       const s = (window).__cokeFamer;
       const { tx, ty } = s.player;
@@ -86,9 +89,62 @@ async function main() {
     await page.screenshot({ path: path.join(outDir, "02-farming.png"), fullPage: true });
 
     // 03: inventory panel
+    await reset();
     await page.keyboard.press("i");
     await page.waitForTimeout(150);
     await page.screenshot({ path: path.join(outDir, "03-inventory.png"), fullPage: true });
+
+    // 04: shop panel
+    await reset();
+    await page.keyboard.press("o");
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(outDir, "04-shop.png"), fullPage: true });
+
+    // 05: chest management (inventory + chest grid)
+    await reset();
+    await page.evaluate(() => {
+      const s = (window).__cokeFamer;
+      s.api.shopBuy("chest", 1);
+
+      const { tx, ty } = s.player;
+      const candidates = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 },
+        { tx: tx + 2, ty },
+        { tx: tx - 2, ty },
+        { tx, ty: ty + 2 },
+        { tx, ty: ty - 2 }
+      ];
+
+      let pos = null;
+      for (const c of candidates) {
+        if (s.api.placeChestAt(c.tx, c.ty)) {
+          pos = c;
+          break;
+        }
+      }
+      if (!pos) return;
+
+      s.api.openChestAt(pos.tx, pos.ty);
+
+      const invSlots = s.inventorySlots ?? [];
+      const seedIndex = invSlots.findIndex((it) => it?.itemId === "parsnip_seed");
+      if (seedIndex >= 0) {
+        const half = s.api.invSplitHalf(seedIndex);
+        if (half) s.api.chestPlace(0, half);
+      }
+    });
+    await page.keyboard.press("i");
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, "05-chest.png"), fullPage: true });
+
+    // 06: gathering resources (wood/stone nodes + axe/pickaxe)
+    await reset();
+    await page.keyboard.press("6");
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(outDir, "06-gather.png"), fullPage: true });
 
     await browser.close();
   } finally {
@@ -102,4 +158,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
