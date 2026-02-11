@@ -614,3 +614,39 @@ test("save slots: switching keeps saves isolated", async ({ page }) => {
   expect((res as any).obj2).toBeNull();
   expect((res as any).obj1?.id).toBe("chest");
 });
+
+test("npc: talk increases friendship and persists", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+
+  await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    s.api.setSaveSlot(3);
+    s.api.reset();
+  });
+
+  const talked = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const before = s.relationships?.townie?.friendship ?? 0;
+    const res = s.api.talkToNpc("townie");
+    const after = s.relationships?.townie?.friendship ?? 0;
+    s.api.save();
+    return { before, after, res };
+  });
+
+  expect(talked.res.ok).toBeTruthy();
+  expect(talked.after).toBeGreaterThan(talked.before);
+
+  await page.reload();
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+
+  const afterReload = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    s.api.setSaveSlot(3);
+    return s.relationships?.townie?.friendship ?? 0;
+  });
+
+  expect(afterReload).toBeGreaterThan(0);
+});

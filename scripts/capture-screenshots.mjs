@@ -419,6 +419,15 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "16-save-slots.png"), fullPage: true });
 
+    // 17: dialogue panel (NPC talk)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      s.api.talkToNpc("townie");
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, "17-dialogue.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

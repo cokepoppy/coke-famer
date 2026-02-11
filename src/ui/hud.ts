@@ -3,6 +3,7 @@ import { mountShopPanel } from "./shopPanel";
 import { mountCraftPanel } from "./craftPanel";
 import { mountQuestPanel } from "./questPanel";
 import { mountSaveSlotsPanel } from "./saveSlotsPanel";
+import { mountDialoguePanel } from "./dialoguePanel";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string) {
   const node = document.createElement(tag);
@@ -67,7 +68,8 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "0-9,-,=,T,R: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | M: Saves | P: Pause";
+  subHint.textContent =
+    "0-9,-,=,T,R: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | M: Saves | Esc: Close Dialogue | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -129,6 +131,10 @@ export function mountHud(containerId: string): void {
   const saveHost = el("div");
   host.appendChild(saveHost);
   const { setOpen: setSaveOpen, isOpen: isSaveOpen, render: renderSave } = mountSaveSlotsPanel(saveHost);
+
+  const dialogueHost = el("div");
+  host.appendChild(dialogueHost);
+  const { setOpen: setDialogueOpen, isOpen: isDialogueOpen, render: renderDialogue } = mountDialoguePanel(dialogueHost);
 
   let invPausedByUi = false;
   const openInventory = () => {
@@ -236,12 +242,31 @@ export function mountHud(containerId: string): void {
     else openSave();
   };
 
+  let dialoguePausedByUi = false;
+  const openDialogue = () => {
+    setDialogueOpen(true);
+    const paused = Boolean(window.__cokeFamer?.timePaused);
+    if (!paused) {
+      dialoguePausedByUi = true;
+      window.__cokeFamer?.api?.setPaused(true);
+    }
+  };
+  const closeDialogue = () => {
+    setDialogueOpen(false);
+    window.__cokeFamer?.api?.closeDialogue?.();
+    if (dialoguePausedByUi) {
+      dialoguePausedByUi = false;
+      window.__cokeFamer?.api?.setPaused(false);
+    }
+  };
+
   window.addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "i") toggleInventory();
     if (e.key.toLowerCase() === "o") toggleShop();
     if (e.key.toLowerCase() === "c") toggleCraft();
     if (e.key.toLowerCase() === "j") toggleQuest();
     if (e.key.toLowerCase() === "m") toggleSave();
+    if (e.key === "Escape") closeDialogue();
   });
 
   invHost.addEventListener("inventory:close", () => closeInventory());
@@ -249,6 +274,7 @@ export function mountHud(containerId: string): void {
   craftHost.addEventListener("craft:close", () => closeCraft());
   questHost.addEventListener("quest:close", () => closeQuest());
   saveHost.addEventListener("save:close", () => closeSave());
+  dialogueHost.addEventListener("dialogue:close", () => closeDialogue());
 
   const renderHotbar = (mode: string, inventory: Record<string, number>, selectedSeed?: string) => {
     const seedId = selectedSeed ?? "parsnip_seed";
@@ -303,6 +329,8 @@ export function mountHud(containerId: string): void {
       renderHotbar(s.mode, s.inventory, s.selectedSeed);
       if (isQuestOpen()) renderQuest();
       if (isSaveOpen()) renderSave();
+      if (s.dialogue && !isDialogueOpen()) openDialogue();
+      if (isDialogueOpen()) renderDialogue();
 
       btnPause.textContent = s.timePaused ? "Resume" : "Pause";
 
@@ -321,6 +349,7 @@ export function mountHud(containerId: string): void {
       if (isCraftOpen()) renderCraft();
       if (isQuestOpen()) renderQuest();
       if (isSaveOpen()) renderSave();
+      if (isDialogueOpen()) renderDialogue();
     }
     requestAnimationFrame(render);
   };

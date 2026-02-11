@@ -1,6 +1,7 @@
 import { CROPS, type CropId } from "../content/crops";
 import { ITEMS, type ItemId } from "../content/items";
 import { RECIPES } from "../content/recipes";
+import { NPCS, type NpcId } from "../content/npcs";
 import { calendarFromDay, weatherForDay } from "./calendar";
 import type {
   GameSaveV0,
@@ -9,8 +10,10 @@ import type {
   GameSaveV3,
   GameSaveV4,
   GameSaveV5,
+  GameSaveV6,
   InventorySlot,
   QuestState,
+  RelationshipState,
   TileKey,
   PlacedObjectState,
   TileState
@@ -21,7 +24,7 @@ function saveKey(slot: number): string {
   if (s === 1) return "coke-famer-save";
   return `coke-famer-save:slot${s}`;
 }
-const CURRENT_SAVE_VERSION = 5 as const;
+const CURRENT_SAVE_VERSION = 6 as const;
 
 const DAY_START_MINUTES = 6 * 60;
 const DAY_END_MINUTES = 26 * 60; // 2:00 next day (allow wrap handling in UI)
@@ -84,6 +87,7 @@ export class FarmGame {
   private tiles = new Map<TileKey, TileState>();
   private objects = new Map<TileKey, PlacedObjectState>();
   private quest: QuestState | null = null;
+  private relationships: Partial<Record<NpcId, RelationshipState>> = {};
 
   static newGame(): FarmGame {
     const g = new FarmGame();
@@ -94,13 +98,21 @@ export class FarmGame {
     g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
     g.addItem("parsnip_seed", 15);
     g.quest = g.generateQuestForDay(g.day);
+    g.relationships = g.defaultRelationships();
     return g;
   }
 
   static loadFromStorage(slot = 1): FarmGame | null {
     const raw = localStorage.getItem(saveKey(slot));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3 | GameSaveV4 | GameSaveV5;
+    const parsed = JSON.parse(raw) as
+      | GameSaveV0
+      | GameSaveV1
+      | GameSaveV2
+      | GameSaveV3
+      | GameSaveV4
+      | GameSaveV5
+      | GameSaveV6;
     if (!parsed) return null;
 
     const g = new FarmGame();
@@ -113,6 +125,7 @@ export class FarmGame {
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
+      g.relationships = g.defaultRelationships();
       // Migrate-on-load
       g.saveToStorage(slot);
       return g;
@@ -126,6 +139,7 @@ export class FarmGame {
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
+      g.relationships = g.defaultRelationships();
       // Migrate-on-load
       g.saveToStorage(slot);
       return g;
@@ -139,6 +153,7 @@ export class FarmGame {
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
+      g.relationships = g.defaultRelationships();
       // Migrate-on-load
       g.saveToStorage(slot);
       return g;
@@ -152,6 +167,7 @@ export class FarmGame {
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
+      g.relationships = g.defaultRelationships();
       // Migrate-on-load
       g.saveToStorage(slot);
       return g;
@@ -166,6 +182,7 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
       g.quest = g.generateQuestForDay(g.day);
+      g.relationships = g.defaultRelationships();
       // Migrate-on-load
       g.saveToStorage(slot);
       return g;
@@ -180,6 +197,22 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
       g.quest = parsed.quest ?? g.generateQuestForDay(g.day);
+      g.relationships = g.defaultRelationships();
+      // Migrate-on-load
+      g.saveToStorage(slot);
+      return g;
+    }
+    if (parsed.version === 6) {
+      g.day = parsed.day;
+      g.minutes = parsed.minutes ?? DAY_START_MINUTES;
+      g.energy = parsed.energy ?? ENERGY_MAX;
+      g.gold = parsed.gold ?? START_GOLD;
+      g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
+      while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
+      for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
+      g.quest = parsed.quest ?? g.generateQuestForDay(g.day);
+      g.relationships = { ...g.defaultRelationships(), ...(parsed.relationships ?? {}) };
       return g;
     }
     return null;
@@ -197,7 +230,7 @@ export class FarmGame {
       objects.push({ tx: Number(txStr), ty: Number(tyStr), obj });
     }
 
-    const save: GameSaveV5 = {
+    const save: GameSaveV6 = {
       version: CURRENT_SAVE_VERSION,
       day: this.day,
       minutes: this.minutes,
@@ -206,7 +239,8 @@ export class FarmGame {
       gold: this.gold,
       tiles,
       objects,
-      quest: this.quest
+      quest: this.quest,
+      relationships: this.relationships
     };
     localStorage.setItem(saveKey(slot), JSON.stringify(save));
   }
@@ -221,6 +255,7 @@ export class FarmGame {
     this.tiles = new Map();
     this.objects = new Map();
     this.quest = fresh.quest;
+    this.relationships = fresh.relationships;
   }
 
   static exportSaveJson(slot = 1): string | null {
@@ -290,6 +325,27 @@ export class FarmGame {
     q.completed = true;
     this.quest = q;
     return { ok: true, goldGained: q.rewardGold };
+  }
+
+  getRelationship(npcId: NpcId): RelationshipState {
+    const r = this.relationships[npcId];
+    if (r) return { ...r };
+    return { friendship: 0, lastTalkDay: 0 };
+  }
+
+  talkToNpc(npcId: NpcId): { ok: boolean; reason?: string; friendshipGained?: number; relationship?: RelationshipState } {
+    if (!NPCS[npcId]) return { ok: false, reason: "unknown_npc" };
+    const current = this.relationships[npcId] ?? { friendship: 0, lastTalkDay: 0 };
+    if (current.lastTalkDay === this.day) return { ok: false, reason: "already_talked", relationship: { ...current } };
+    const next = { ...current, friendship: current.friendship + 20, lastTalkDay: this.day };
+    this.relationships[npcId] = next;
+    return { ok: true, friendshipGained: 20, relationship: { ...next } };
+  }
+
+  private defaultRelationships(): Partial<Record<NpcId, RelationshipState>> {
+    const out: Partial<Record<NpcId, RelationshipState>> = {};
+    for (const id of Object.keys(NPCS) as NpcId[]) out[id] = { friendship: 0, lastTalkDay: 0 };
+    return out;
   }
 
   private generateQuestForDay(day: number): QuestState {
@@ -1015,7 +1071,6 @@ export class FarmGame {
 
     this.applySprinklers();
 
-    this.saveToStorage();
     return { shipped };
   }
 

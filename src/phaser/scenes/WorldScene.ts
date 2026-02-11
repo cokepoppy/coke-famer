@@ -3,6 +3,7 @@ import { FarmGame, GAME_CONSTANTS } from "../../simulation/FarmGame";
 import type { ActionId, ToolId } from "../../simulation/types";
 import { CROPS } from "../../content/crops";
 import type { ItemId } from "../../content/items";
+import { NPCS, type NpcId } from "../../content/npcs";
 
 const ASSETS_BASE = "ga-assets";
 const TILE_SIZE = 32;
@@ -51,6 +52,10 @@ export class WorldScene extends Phaser.Scene {
   private selectedSeed: ItemId = "parsnip_seed";
   private isFreshGame = false;
   private saveSlot = 1;
+  private npcId: NpcId = "townie";
+  private npc!: Phaser.Physics.Arcade.Sprite;
+  private npcTargets: Array<{ atMinutes: number; tx: number; ty: number }> = [];
+  private dialogue: { npcId: NpcId; text: string } | null = null;
 
   preload(): void {
     this.load.tilemapTiledJSON(
@@ -308,6 +313,7 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.isFreshGame) this.seedDemoResources();
     this.ensureShippingBin();
+    this.createNpc();
     this.gameState.refreshDerivedState();
     this.gameState.saveToStorage(this.saveSlot);
     this.redrawAllObjects();
@@ -324,6 +330,7 @@ export class WorldScene extends Phaser.Scene {
       gold: this.gameState.gold,
       timePaused: this.timePaused,
       toast: null,
+      dialogue: null,
       tilledCount: this.farmVisuals.size,
       lastClick: null,
       lastAction: null,
@@ -332,6 +339,7 @@ export class WorldScene extends Phaser.Scene {
           const res = this.gameState.sleepNextDay();
           if (res.shipped.goldGained > 0) this.toast(`Shipped +${res.shipped.goldGained}g`, "info");
           this.redrawAllFarmTiles();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return res;
         },
@@ -481,6 +489,28 @@ export class WorldScene extends Phaser.Scene {
           this.syncWindowState();
           return res;
         },
+        talkToNpc: (npcId: string) => {
+          if (npcId !== this.npcId) {
+            const res = { ok: false, reason: "unknown_npc" };
+            this.toast(`Talk failed: ${res.reason}`, "warn");
+            return res;
+          }
+          const res = this.gameState.talkToNpc(this.npcId);
+          if (res.ok) {
+            const name = NPCS[this.npcId]?.name ?? npcId;
+            this.dialogue = { npcId: this.npcId, text: `Hi! Nice to see you.` };
+            this.toast(`Talked to ${name} (+${res.friendshipGained ?? 0})`, "info");
+          } else {
+            this.toast(`Talk failed: ${res.reason ?? "unknown"}`, "warn");
+          }
+          this.gameState.saveToStorage(this.saveSlot);
+          this.syncWindowState();
+          return res;
+        },
+        closeDialogue: () => {
+          this.dialogue = null;
+          this.syncWindowState();
+        },
         craft: (itemId: string, qty: number) => {
           const res = this.gameState.craft(itemId as any, qty);
           if (!res.ok) this.toast(`Craft failed: ${res.reason ?? "unknown"}`, "warn");
@@ -627,8 +657,62 @@ export class WorldScene extends Phaser.Scene {
     this.syncWindowState();
   }
 
+  private createNpc(): void {
+    this.npc = this.physics.add.sprite(1856 + 64, 288 + 64, "player", "down");
+    this.npc.setTint(0xffc107);
+    this.npc.setCollideWorldBounds(true);
+    const body = this.npc.body as Phaser.Physics.Arcade.Body;
+    body.setSize(16, 16);
+    body.setOffset(8, 14);
+    this.physics.add.collider(this.npc, this.collisionsLayer);
+    this.physics.add.collider(this.player, this.npc);
+
+    // Pick two open tiles near the player for a simple schedule.
+    const baseTx = this.map.worldToTileX(this.player.x) ?? 0;
+    const baseTy = this.map.worldToTileY(this.player.y) ?? 0;
+    const home = this.findOpenTileNear(baseTx, baseTy, 2, 8) ?? { tx: baseTx + 2, ty: baseTy + 2 };
+    const plaza = this.findOpenTileNear(baseTx, baseTy, 3, 12) ?? { tx: baseTx + 4, ty: baseTy };
+    this.npcTargets = [
+      { atMinutes: 6 * 60, tx: home.tx, ty: home.ty },
+      { atMinutes: 9 * 60, tx: plaza.tx, ty: plaza.ty },
+      { atMinutes: 18 * 60, tx: home.tx, ty: home.ty }
+    ];
+
+    const x = (home.tx + 0.5) * this.map.tileWidth;
+    const y = (home.ty + 0.5) * this.map.tileHeight;
+    this.npc.setPosition(x, y);
+  }
+
+  private findOpenTileNear(baseTx: number, baseTy: number, minR: number, maxR: number): { tx: number; ty: number } | null {
+    const isOpen = (tx: number, ty: number) => {
+      if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+      const blocked = this.collisionsLayer.getTileAt(tx, ty, true);
+      const isBlocked = Boolean(blocked?.properties?.collide);
+      if (isBlocked) return false;
+      if (this.gameState.getObject(tx, ty)) return false;
+      const t = this.gameState.getTile(tx, ty);
+      if (t.crop || t.tilled || t.watered) return false;
+      return true;
+    };
+
+    for (let r = minR; r <= maxR; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const dy = r - Math.abs(dx);
+        const candidates = [
+          { tx: baseTx + dx, ty: baseTy + dy },
+          ...(dy !== 0 ? [{ tx: baseTx + dx, ty: baseTy - dy }] : [])
+        ];
+        for (const c of candidates) {
+          if (isOpen(c.tx, c.ty)) return c;
+        }
+      }
+    }
+    return null;
+  }
+
   update(_time: number, delta: number): void {
     this.tickClock(delta);
+    this.tickNpc(delta);
 
     const speed = 180;
     const vx =
@@ -659,6 +743,37 @@ export class WorldScene extends Phaser.Scene {
     const ty = this.map.worldToTileY(this.player.y) ?? 0;
     this.playerTile = { tx, ty };
     if (window.__cokeFamer) window.__cokeFamer.player = { x: this.player.x, y: this.player.y, tx, ty };
+  }
+
+  private tickNpc(_delta: number): void {
+    if (!this.npcTargets.length) return;
+    const now = this.gameState.minutes;
+    let target = this.npcTargets[0]!;
+    for (const t of this.npcTargets) {
+      if (now >= t.atMinutes) target = t;
+    }
+    const tx = target.tx;
+    const ty = target.ty;
+    const targetX = (tx + 0.5) * this.map.tileWidth;
+    const targetY = (ty + 0.5) * this.map.tileHeight;
+    const dx = targetX - this.npc.x;
+    const dy = targetY - this.npc.y;
+    const dist = Math.hypot(dx, dy);
+    const speed = 90;
+    const body = this.npc.body as Phaser.Physics.Arcade.Body;
+    if (dist < 2) {
+      body.setVelocity(0, 0);
+    } else {
+      body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
+    }
+    this.npc.setDepth(ENTITY_DEPTH_BASE + this.npc.y);
+  }
+
+  private isNpcAt(tx: number, ty: number): boolean {
+    if (!this.npc) return false;
+    const ntx = this.map.worldToTileX(this.npc.x);
+    const nty = this.map.worldToTileY(this.npc.y);
+    return ntx === tx && nty === ty;
   }
 
   private createPlayerAnims(): void {
@@ -777,6 +892,10 @@ export class WorldScene extends Phaser.Scene {
       window.__cokeFamer.weather = cal.weather;
     }
     window.__cokeFamer.quest = this.gameState?.getQuest() ?? null;
+    window.__cokeFamer.relationships = {
+      [this.npcId]: this.gameState.getRelationship(this.npcId)
+    };
+    window.__cokeFamer.dialogue = this.dialogue ? { ...this.dialogue } : null;
     window.__cokeFamer.inventorySlots = this.gameState
       ?.getInventorySlots()
       .map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null));
@@ -1123,27 +1242,43 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     else if ((this.mode as ToolId) === "hand") {
-      const obj = this.gameState.getObject(tx, ty);
-      if (obj?.id === "chest") {
-        this.activeChest = { tx, ty };
-        this.activeContainer = { kind: "chest", tx, ty };
-        this.toast("Chest opened (press I to manage items)", "info");
-        ok = true;
-      } else if (obj?.id === "shipping_bin") {
-        this.activeChest = null;
-        this.activeContainer = { kind: "shipping_bin", tx, ty };
-        this.toast("Shipping bin opened (press I to manage items)", "info");
-        ok = true;
-      } else if (obj?.id === "preserves_jar") {
-        const res = this.gameState.interactPreservesJar(tx, ty);
+      if (this.isNpcAt(tx, ty)) {
+        const res = this.gameState.talkToNpc(this.npcId);
         ok = res.ok;
-        if (ok) this.toast("Jar updated", "info");
-        else if (res.reason === "processing") this.toast("Jar is processing", "warn");
-        else if (res.reason === "no_input") this.toast("No produce to insert", "warn");
-        else if (res.reason === "inv_full") this.toast("Inventory full", "warn");
-        else this.toast("Jar action failed", "warn");
+        if (ok) {
+          this.dialogue = { npcId: this.npcId, text: "Hi! Nice to see you." };
+          this.toast(`Talked (+${res.friendshipGained ?? 0})`, "info");
+          this.gameState.saveToStorage(this.saveSlot);
+        } else if (res.reason === "already_talked") {
+          ok = true;
+          this.dialogue = { npcId: this.npcId, text: "We already talked today. See you tomorrow!" };
+          this.toast("Already talked today", "warn");
+        } else {
+          this.toast(`Talk failed: ${res.reason ?? "unknown"}`, "warn");
+        }
       } else {
-        ok = this.gameState.harvest(tx, ty);
+        const obj = this.gameState.getObject(tx, ty);
+        if (obj?.id === "chest") {
+          this.activeChest = { tx, ty };
+          this.activeContainer = { kind: "chest", tx, ty };
+          this.toast("Chest opened (press I to manage items)", "info");
+          ok = true;
+        } else if (obj?.id === "shipping_bin") {
+          this.activeChest = null;
+          this.activeContainer = { kind: "shipping_bin", tx, ty };
+          this.toast("Shipping bin opened (press I to manage items)", "info");
+          ok = true;
+        } else if (obj?.id === "preserves_jar") {
+          const res = this.gameState.interactPreservesJar(tx, ty);
+          ok = res.ok;
+          if (ok) this.toast("Jar updated", "info");
+          else if (res.reason === "processing") this.toast("Jar is processing", "warn");
+          else if (res.reason === "no_input") this.toast("No produce to insert", "warn");
+          else if (res.reason === "inv_full") this.toast("Inventory full", "warn");
+          else this.toast("Jar action failed", "warn");
+        } else {
+          ok = this.gameState.harvest(tx, ty);
+        }
       }
     }
 
@@ -1295,18 +1430,19 @@ export class WorldScene extends Phaser.Scene {
     if (this.timePaused) return;
     this.timeAccumulatorMs += deltaMs;
     let advanced = false;
-    while (this.timeAccumulatorMs >= this.msPerMinute) {
-      this.timeAccumulatorMs -= this.msPerMinute;
-      this.gameState.advanceMinutes(1);
-      advanced = true;
-      if (this.gameState.minutes >= GAME_CONSTANTS.DAY_END_MINUTES) {
-        this.toast("2:00 AM — You passed out. New day.", "warn");
-        const res = this.gameState.sleepNextDay();
-        if (res.shipped.goldGained > 0) this.toast(`Shipped +${res.shipped.goldGained}g`, "info");
-        this.redrawAllFarmTiles();
-        break;
-      }
-    }
+        while (this.timeAccumulatorMs >= this.msPerMinute) {
+          this.timeAccumulatorMs -= this.msPerMinute;
+          this.gameState.advanceMinutes(1);
+          advanced = true;
+          if (this.gameState.minutes >= GAME_CONSTANTS.DAY_END_MINUTES) {
+            this.toast("2:00 AM — You passed out. New day.", "warn");
+            const res = this.gameState.sleepNextDay();
+            if (res.shipped.goldGained > 0) this.toast(`Shipped +${res.shipped.goldGained}g`, "info");
+            this.redrawAllFarmTiles();
+            this.gameState.saveToStorage(this.saveSlot);
+            break;
+          }
+        }
     if (advanced) this.syncWindowState();
   }
 

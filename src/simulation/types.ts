@@ -1,5 +1,6 @@
 import type { CropId } from "../content/crops";
 import type { ItemId } from "../content/items";
+import type { NpcId } from "../content/npcs";
 
 export type ToolId = "hoe" | "watering_can" | "axe" | "pickaxe" | "scythe" | "hand";
 export type ActionId = ToolId | ItemId;
@@ -30,6 +31,11 @@ export type QuestState = {
   qty: number;
   rewardGold: number;
   completed: boolean;
+};
+
+export type RelationshipState = {
+  friendship: number; // 0..?
+  lastTalkDay: number; // 0 means never
 };
 
 export type PlacedObjectId =
@@ -137,4 +143,17 @@ export type GameSaveV5 = {
   tiles: Array<{ tx: number; ty: number; state: TileState }>;
   objects: Array<{ tx: number; ty: number; obj: PlacedObjectState }>;
   quest: QuestState | null;
+};
+
+export type GameSaveV6 = {
+  version: 6;
+  day: number;
+  minutes: number;
+  energy: number;
+  gold: number;
+  inventorySlots: Array<InventorySlot | null>;
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+  objects: Array<{ tx: number; ty: number; obj: PlacedObjectState }>;
+  quest: QuestState | null;
+  relationships: Partial<Record<NpcId, RelationshipState>>;
 };
