@@ -24,6 +24,14 @@ export type InventorySlot = {
   qty: number;
 };
 
+export type QuestState = {
+  dayIssued: number;
+  itemId: ItemId;
+  qty: number;
+  rewardGold: number;
+  completed: boolean;
+};
+
 export type PlacedObjectId =
   | "chest"
   | "shipping_bin"
@@ -117,4 +125,16 @@ export type GameSaveV4 = {
   inventorySlots: Array<InventorySlot | null>;
   tiles: Array<{ tx: number; ty: number; state: TileState }>;
   objects: Array<{ tx: number; ty: number; obj: PlacedObjectState }>;
+};
+
+export type GameSaveV5 = {
+  version: 5;
+  day: number;
+  minutes: number;
+  energy: number;
+  gold: number;
+  inventorySlots: Array<InventorySlot | null>;
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+  objects: Array<{ tx: number; ty: number; obj: PlacedObjectState }>;
+  quest: QuestState | null;
 };

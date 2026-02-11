@@ -8,14 +8,16 @@ import type {
   GameSaveV2,
   GameSaveV3,
   GameSaveV4,
+  GameSaveV5,
   InventorySlot,
+  QuestState,
   TileKey,
   PlacedObjectState,
   TileState
 } from "./types";
 
 const SAVE_KEY = "coke-famer-save";
-const CURRENT_SAVE_VERSION = 4 as const;
+const CURRENT_SAVE_VERSION = 5 as const;
 
 const DAY_START_MINUTES = 6 * 60;
 const DAY_END_MINUTES = 26 * 60; // 2:00 next day (allow wrap handling in UI)
@@ -77,6 +79,7 @@ export class FarmGame {
   inventorySlots: Array<InventorySlot | null> = Array.from({ length: INVENTORY_SIZE }, () => null);
   private tiles = new Map<TileKey, TileState>();
   private objects = new Map<TileKey, PlacedObjectState>();
+  private quest: QuestState | null = null;
 
   static newGame(): FarmGame {
     const g = new FarmGame();
@@ -86,13 +89,14 @@ export class FarmGame {
     g.gold = START_GOLD;
     g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
     g.addItem("parsnip_seed", 15);
+    g.quest = g.generateQuestForDay(g.day);
     return g;
   }
 
   static loadFromStorage(): FarmGame | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3 | GameSaveV4;
+    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3 | GameSaveV4 | GameSaveV5;
     if (!parsed) return null;
 
     const g = new FarmGame();
@@ -104,6 +108,7 @@ export class FarmGame {
       g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
       g.saveToStorage();
       return g;
@@ -116,6 +121,7 @@ export class FarmGame {
       g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
       g.saveToStorage();
       return g;
@@ -128,6 +134,7 @@ export class FarmGame {
       g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
       g.saveToStorage();
       return g;
@@ -140,6 +147,7 @@ export class FarmGame {
       g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
       g.saveToStorage();
       return g;
@@ -153,6 +161,21 @@ export class FarmGame {
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
+      g.quest = g.generateQuestForDay(g.day);
+      // Migrate-on-load
+      g.saveToStorage();
+      return g;
+    }
+    if (parsed.version === 5) {
+      g.day = parsed.day;
+      g.minutes = parsed.minutes ?? DAY_START_MINUTES;
+      g.energy = parsed.energy ?? ENERGY_MAX;
+      g.gold = parsed.gold ?? START_GOLD;
+      g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
+      while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
+      for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
+      g.quest = parsed.quest ?? g.generateQuestForDay(g.day);
       return g;
     }
     return null;
@@ -170,7 +193,7 @@ export class FarmGame {
       objects.push({ tx: Number(txStr), ty: Number(tyStr), obj });
     }
 
-    const save: GameSaveV4 = {
+    const save: GameSaveV5 = {
       version: CURRENT_SAVE_VERSION,
       day: this.day,
       minutes: this.minutes,
@@ -178,7 +201,8 @@ export class FarmGame {
       inventorySlots: this.inventorySlots,
       gold: this.gold,
       tiles,
-      objects
+      objects,
+      quest: this.quest
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
   }
@@ -192,6 +216,7 @@ export class FarmGame {
     this.inventorySlots = fresh.inventorySlots;
     this.tiles = new Map();
     this.objects = new Map();
+    this.quest = fresh.quest;
     this.saveToStorage();
   }
 
@@ -226,6 +251,43 @@ export class FarmGame {
 
   getAbsMinutes(): number {
     return (this.day - 1) * MINUTES_PER_DAY + this.minutes;
+  }
+
+  getQuest(): QuestState | null {
+    return this.quest ? { ...this.quest } : null;
+  }
+
+  debugSetQuest(q: QuestState | null): void {
+    this.quest = q ? { ...q } : null;
+  }
+
+  completeQuest(): { ok: boolean; reason?: string; goldGained?: number } {
+    const q = this.quest;
+    if (!q) return { ok: false, reason: "no_quest" };
+    if (q.completed) return { ok: false, reason: "completed" };
+    if (this.countItem(q.itemId) < q.qty) return { ok: false, reason: "missing" };
+    const ok = this.consumeItem(q.itemId, q.qty);
+    if (!ok) return { ok: false, reason: "missing" };
+    this.gold += q.rewardGold;
+    q.completed = true;
+    this.quest = q;
+    return { ok: true, goldGained: q.rewardGold };
+  }
+
+  private generateQuestForDay(day: number): QuestState {
+    // Deterministic "Help Wanted" style quest pool (keep to early-game items).
+    const pool: Array<{ itemId: "wood" | "stone" | "fiber" | "parsnip"; baseQty: number; baseGold: number }> = [
+      { itemId: "wood", baseQty: 15, baseGold: 60 },
+      { itemId: "stone", baseQty: 15, baseGold: 60 },
+      { itemId: "fiber", baseQty: 10, baseGold: 50 },
+      { itemId: "parsnip", baseQty: 1, baseGold: 80 }
+    ];
+    const idx = day % pool.length;
+    const pick = pool[idx]!;
+    const extra = Math.floor((day % 7) / 3);
+    const qty = pick.baseQty + extra * (pick.itemId === "parsnip" ? 0 : 5);
+    const rewardGold = pick.baseGold + extra * 15;
+    return { dayIssued: day, itemId: pick.itemId, qty, rewardGold, completed: false };
   }
 
   refreshDerivedState(): void {
@@ -908,6 +970,7 @@ export class FarmGame {
     this.energy = ENERGY_MAX;
     this.updateMachines();
     this.growTreesNextDay();
+    this.quest = this.generateQuestForDay(this.day);
 
     // Season change can kill out-of-season crops.
     {

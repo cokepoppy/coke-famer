@@ -1,6 +1,7 @@
 import { mountInventoryPanel } from "./inventoryPanel";
 import { mountShopPanel } from "./shopPanel";
 import { mountCraftPanel } from "./craftPanel";
+import { mountQuestPanel } from "./questPanel";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string) {
   const node = document.createElement(tag);
@@ -65,7 +66,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "0-9,-,=,T,R: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
+  subHint.textContent = "0-9,-,=,T,R: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -119,6 +120,10 @@ export function mountHud(containerId: string): void {
   const craftHost = el("div");
   host.appendChild(craftHost);
   const { setOpen: setCraftOpen, isOpen: isCraftOpen, render: renderCraft } = mountCraftPanel(craftHost);
+
+  const questHost = el("div");
+  host.appendChild(questHost);
+  const { setOpen: setQuestOpen, isOpen: isQuestOpen, render: renderQuest } = mountQuestPanel(questHost);
 
   let invPausedByUi = false;
   const openInventory = () => {
@@ -184,15 +189,38 @@ export function mountHud(containerId: string): void {
     else openCraft();
   };
 
+  let questPausedByUi = false;
+  const openQuest = () => {
+    setQuestOpen(true);
+    const paused = Boolean(window.__cokeFamer?.timePaused);
+    if (!paused) {
+      questPausedByUi = true;
+      window.__cokeFamer?.api?.setPaused(true);
+    }
+  };
+  const closeQuest = () => {
+    setQuestOpen(false);
+    if (questPausedByUi) {
+      questPausedByUi = false;
+      window.__cokeFamer?.api?.setPaused(false);
+    }
+  };
+  const toggleQuest = () => {
+    if (isQuestOpen()) closeQuest();
+    else openQuest();
+  };
+
   window.addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "i") toggleInventory();
     if (e.key.toLowerCase() === "o") toggleShop();
     if (e.key.toLowerCase() === "c") toggleCraft();
+    if (e.key.toLowerCase() === "j") toggleQuest();
   });
 
   invHost.addEventListener("inventory:close", () => closeInventory());
   shopHost.addEventListener("shop:close", () => closeShop());
   craftHost.addEventListener("craft:close", () => closeCraft());
+  questHost.addEventListener("quest:close", () => closeQuest());
 
   const renderHotbar = (mode: string, inventory: Record<string, number>, selectedSeed?: string) => {
     const seedId = selectedSeed ?? "parsnip_seed";
@@ -245,6 +273,7 @@ export function mountHud(containerId: string): void {
       hudEnergy.textContent = `${s.energy ?? "?"}/${s.energyMax ?? "?"}`;
       hudGold.textContent = String(s.gold ?? 0);
       renderHotbar(s.mode, s.inventory, s.selectedSeed);
+      if (isQuestOpen()) renderQuest();
 
       btnPause.textContent = s.timePaused ? "Resume" : "Pause";
 
@@ -258,9 +287,10 @@ export function mountHud(containerId: string): void {
         toast.style.opacity = "0";
       }
 
-      renderInv();
-      renderShop();
-      renderCraft();
+      if (isInvOpen()) renderInv();
+      if (isShopOpen()) renderShop();
+      if (isCraftOpen()) renderCraft();
+      if (isQuestOpen()) renderQuest();
     }
     requestAnimationFrame(render);
   };

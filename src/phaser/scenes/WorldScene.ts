@@ -423,6 +423,22 @@ export class WorldScene extends Phaser.Scene {
           this.gameState.saveToStorage();
           return res;
         },
+        getQuest: () => {
+          return this.gameState.getQuest();
+        },
+        setQuest: (q: any) => {
+          this.gameState.debugSetQuest(q);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+        },
+        completeQuest: () => {
+          const res = this.gameState.completeQuest();
+          if (res.ok) this.toast(`Quest complete +${res.goldGained ?? 0}g`, "info");
+          else this.toast(`Quest failed: ${res.reason ?? "unknown"}`, "warn");
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return res;
+        },
         craft: (itemId: string, qty: number) => {
           const res = this.gameState.craft(itemId as any, qty);
           if (!res.ok) this.toast(`Craft failed: ${res.reason ?? "unknown"}`, "warn");
@@ -717,6 +733,7 @@ export class WorldScene extends Phaser.Scene {
       window.__cokeFamer.year = cal.year;
       window.__cokeFamer.weather = cal.weather;
     }
+    window.__cokeFamer.quest = this.gameState?.getQuest() ?? null;
     window.__cokeFamer.inventorySlots = this.gameState
       ?.getInventorySlots()
       .map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null));

@@ -22,6 +22,7 @@ declare global {
       timePaused?: boolean;
       toast?: { text: string; kind: "info" | "warn" | "error"; ts: number } | null;
       container?: { kind: string; tx?: number; ty?: number; slots: Array<{ itemId: string; qty: number } | null> } | null;
+      quest?: { dayIssued: number; itemId: string; qty: number; rewardGold: number; completed: boolean } | null;
       tilledCount: number;
       lastClick: { tx: number; ty: number; blocked: boolean; toggled: boolean } | null;
       lastAction: { kind: string; ok: boolean; tx: number; ty: number } | null;
@@ -45,6 +46,9 @@ declare global {
           stack: { itemId: string; qty: number }
         ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
         shopBuy: (itemId: string, qty: number) => { ok: boolean; reason?: string };
+        getQuest: () => { dayIssued: number; itemId: string; qty: number; rewardGold: number; completed: boolean } | null;
+        setQuest: (q: any) => void;
+        completeQuest: () => { ok: boolean; reason?: string; goldGained?: number };
         craft: (itemId: string, qty: number) => { ok: boolean; reason?: string };
         sellStack: (stack: { itemId: string; qty: number }) => { ok: boolean; goldGained?: number; reason?: string };
         placeChestAt: (tx: number, ty: number) => boolean;

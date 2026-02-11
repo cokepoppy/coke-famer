@@ -541,3 +541,44 @@ test("regrow crop: blueberry yields multiple and regrows after harvest", async (
   expect((res as any).harvest1).toBeGreaterThanOrEqual((res as any).harvest0 + 3);
   expect((res as any).harvest2).toBeGreaterThanOrEqual((res as any).harvest1 + 3);
 });
+
+test("quest: deliver items for gold reward", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const gold0 = s.gold ?? 0;
+    const q = { dayIssued: s.day, itemId: "wood", qty: 1, rewardGold: 123, completed: false };
+    s.api.setQuest(q);
+
+    // Ensure 1 wood in inventory.
+    if ((s.inventory.wood ?? 0) <= 0) {
+      const { tx, ty } = s.player;
+      const adjacent = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      for (let i = 0; i < 5 && (s.inventory.wood ?? 0) <= 0; i++) {
+        for (const p of adjacent) s.api.useAt(p.tx, p.ty, "axe");
+      }
+    }
+
+    const have = s.inventory.wood ?? 0;
+    if (have <= 0) return { ok: false, step: "no_wood" };
+
+    const done = s.api.completeQuest();
+    const gold1 = s.gold ?? 0;
+    const q2 = s.api.getQuest();
+    return { ok: true, done, gold0, gold1, q2 };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).done.ok).toBeTruthy();
+  expect((res as any).gold1).toBeGreaterThan((res as any).gold0);
+  expect((res as any).q2.completed).toBeTruthy();
+});

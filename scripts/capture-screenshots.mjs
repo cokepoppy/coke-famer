@@ -390,6 +390,29 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "14-regrow.png"), fullPage: true });
 
+    // 15: quest panel
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      s.api.setQuest({ dayIssued: s.day, itemId: "wood", qty: 1, rewardGold: 123, completed: false });
+      // Ensure at least 1 wood (demo seeds include wood nodes; try chop around).
+      if ((s.inventory.wood ?? 0) <= 0) {
+        const { tx, ty } = s.player;
+        const adjacent = [
+          { tx: tx + 1, ty },
+          { tx: tx - 1, ty },
+          { tx, ty: ty + 1 },
+          { tx, ty: ty - 1 }
+        ];
+        for (let i = 0; i < 5 && (s.inventory.wood ?? 0) <= 0; i++) {
+          for (const p of adjacent) s.api.useAt(p.tx, p.ty, "axe");
+        }
+      }
+    });
+    await page.keyboard.press("j");
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "15-quest.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");
