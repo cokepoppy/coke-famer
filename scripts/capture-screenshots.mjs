@@ -302,6 +302,30 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "11-sprinkler.png"), fullPage: true });
 
+    // 12: weeds + scythe
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+      const candidates = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      let placed = false;
+      for (const c of candidates) {
+        if (s.api.spawnWeedAt(c.tx, c.ty)) {
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) s.api.spawnWeedAt(tx, ty);
+      s.api.setMode("scythe");
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, "12-scythe.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

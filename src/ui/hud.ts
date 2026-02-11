@@ -45,6 +45,7 @@ export function mountHud(containerId: string): void {
     `Parsnip: <span id="hud-parsnip">0</span> | ` +
     `Wood: <span id="hud-wood">0</span> | ` +
     `Stone: <span id="hud-stone">0</span> | ` +
+    `Fiber: <span id="hud-fiber">0</span> | ` +
     `Chest: <span id="hud-chest">0</span> | ` +
     `Sprinkler: <span id="hud-sprinkler">0</span> | ` +
     `QSprinkler: <span id="hud-quality-sprinkler">0</span>`;
@@ -64,7 +65,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "0-9,-,=: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
+  subHint.textContent = "0-9,-,=,T: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -96,6 +97,7 @@ export function mountHud(containerId: string): void {
   const hudParsnip = document.getElementById("hud-parsnip")!;
   const hudWood = document.getElementById("hud-wood")!;
   const hudStone = document.getElementById("hud-stone")!;
+  const hudFiber = document.getElementById("hud-fiber")!;
   const hudChest = document.getElementById("hud-chest")!;
   const hudSprinkler = document.getElementById("hud-sprinkler")!;
   const hudQualitySprinkler = document.getElementById("hud-quality-sprinkler")!;
@@ -203,6 +205,7 @@ export function mountHud(containerId: string): void {
       { key: "chest", label: `5 Chest (${inventory.chest ?? 0})` },
       { key: "axe", label: "6 Axe" },
       { key: "pickaxe", label: "7 Pick" },
+      { key: "scythe", label: "T Scythe" },
       { key: "fence", label: `8 Fence (${inventory.fence ?? 0})` },
       { key: "path", label: `9 Path (${inventory.path ?? 0})` },
       { key: "preserves_jar", label: `0 Jar (${inventory.preserves_jar ?? 0})` },
@@ -233,6 +236,7 @@ export function mountHud(containerId: string): void {
       hudParsnip.textContent = String(s.inventory.parsnip ?? 0);
       hudWood.textContent = String(s.inventory.wood ?? 0);
       hudStone.textContent = String(s.inventory.stone ?? 0);
+      hudFiber.textContent = String(s.inventory.fiber ?? 0);
       hudChest.textContent = String(s.inventory.chest ?? 0);
       hudSprinkler.textContent = String(s.inventory.sprinkler ?? 0);
       hudQualitySprinkler.textContent = String(s.inventory.quality_sprinkler ?? 0);

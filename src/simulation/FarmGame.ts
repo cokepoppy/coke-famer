@@ -25,8 +25,10 @@ const START_GOLD = 500;
 const CHEST_SIZE = 24;
 const WOOD_NODE_HP = 3;
 const STONE_NODE_HP = 3;
+const WEED_NODE_HP = 1;
 const WOOD_NODE_DROP = 5;
 const STONE_NODE_DROP = 5;
+const WEED_NODE_DROP = 3;
 const MINUTES_PER_DAY = 24 * 60;
 const PRESERVES_MINUTES = 180;
 const SHIPPING_BIN_SIZE = 24;
@@ -36,6 +38,7 @@ const ACTION_MINUTES = {
   water: 10,
   plant: 10,
   harvest: 5,
+  scythe: 5,
   chop: 10,
   mine: 10
 } as const;
@@ -45,6 +48,7 @@ const ACTION_ENERGY = {
   water: 2,
   plant: 2,
   harvest: 0,
+  scythe: 0,
   chop: 4,
   mine: 4
 } as const;
@@ -342,6 +346,16 @@ export class FarmGame {
     if (t.crop || t.tilled || t.watered) return false;
     const nodeHp = hp ?? (kind === "wood" ? WOOD_NODE_HP : STONE_NODE_HP);
     this.objects.set(key, { id: kind, hp: Math.max(1, nodeHp) });
+    return true;
+  }
+
+  placeWeed(tx: number, ty: number, hp?: number): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop || t.tilled || t.watered) return false;
+    const nodeHp = hp ?? WEED_NODE_HP;
+    this.objects.set(key, { id: "weed", hp: Math.max(1, nodeHp) });
     return true;
   }
 
@@ -802,6 +816,19 @@ export class FarmGame {
       this.addItem("stone", STONE_NODE_DROP);
     }
     this.spend("mine");
+    return true;
+  }
+
+  scythe(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "weed") return false;
+    obj.hp -= 1;
+    if (obj.hp <= 0) {
+      this.objects.delete(key);
+      this.addItem("fiber", WEED_NODE_DROP);
+    }
+    this.spend("scythe");
     return true;
   }
 

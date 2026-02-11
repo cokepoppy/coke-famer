@@ -34,6 +34,7 @@ declare global {
         setMode: (mode: string) => void;
         getTile: (tx: number, ty: number) => { tilled: boolean; watered: boolean; crop: unknown };
         getObject: (tx: number, ty: number) => { id: string } | null;
+        spawnWeedAt: (tx: number, ty: number) => boolean;
         setPaused: (paused: boolean) => void;
         invPickup: (index: number) => { itemId: string; qty: number } | null;
         invSplitHalf: (index: number) => { itemId: string; qty: number } | null;

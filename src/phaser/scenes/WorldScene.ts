@@ -290,6 +290,7 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "0") this.setMode("preserves_jar" as any);
       if (ev.key === "-" || ev.key === "_") this.setMode("sprinkler" as any);
       if (ev.key === "=" || ev.key === "+") this.setMode("quality_sprinkler" as any);
+      if (ev.key.toLowerCase() === "t") this.setMode("scythe");
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -367,6 +368,15 @@ export class WorldScene extends Phaser.Scene {
         },
         getObject: (tx: number, ty: number) => {
           return this.gameState.getObject(tx, ty);
+        },
+        spawnWeedAt: (tx: number, ty: number) => {
+          const ok = this.gameState.placeWeed(tx, ty);
+          if (ok) {
+            this.redrawAllObjects();
+            this.gameState.saveToStorage();
+          }
+          this.syncWindowState();
+          return ok;
         },
         setPaused: (paused: boolean) => {
           this.setPaused(paused);
@@ -675,6 +685,7 @@ export class WorldScene extends Phaser.Scene {
       cranberry_jar: this.gameState?.countItem("cranberry_jar" as any) ?? 0,
       wood: this.gameState?.countItem("wood" as any) ?? 0,
       stone: this.gameState?.countItem("stone" as any) ?? 0,
+      fiber: this.gameState?.countItem("fiber" as any) ?? 0,
       fence: this.gameState?.countItem("fence" as any) ?? 0,
       path: this.gameState?.countItem("path" as any) ?? 0,
       sprinkler: this.gameState?.countItem("sprinkler" as any) ?? 0,
@@ -873,6 +884,28 @@ export class WorldScene extends Phaser.Scene {
 
     placeMany("wood", 6);
     placeMany("stone", 6);
+
+    // Add a few weeds for scythe discovery.
+    const weedCandidates = [
+      { tx: base.tx + 1, ty: base.ty },
+      { tx: base.tx - 1, ty: base.ty },
+      { tx: base.tx, ty: base.ty + 1 },
+      { tx: base.tx, ty: base.ty - 1 },
+      { tx: base.tx + 2, ty: base.ty },
+      { tx: base.tx - 2, ty: base.ty },
+      { tx: base.tx, ty: base.ty + 2 },
+      { tx: base.tx, ty: base.ty - 2 }
+    ];
+    let weedsPlaced = 0;
+    for (const c of weedCandidates) {
+      if (weedsPlaced >= 3) break;
+      if (c.tx < 0 || c.ty < 0 || c.tx >= this.map.width || c.ty >= this.map.height) continue;
+      const blocked = this.collisionsLayer.getTileAt(c.tx, c.ty, true);
+      const isBlocked = Boolean(blocked?.properties?.collide);
+      if (isBlocked) continue;
+      if (c.tx === base.tx && c.ty === base.ty) continue;
+      if (this.gameState.placeWeed(c.tx, c.ty)) weedsPlaced += 1;
+    }
   }
 
   private ensureShippingBin(): void {
@@ -957,6 +990,7 @@ export class WorldScene extends Phaser.Scene {
     else if (this.mode === "sprinkler") ok = this.gameState.placeSimpleObject(tx, ty, "sprinkler");
     else if (this.mode === "quality_sprinkler") ok = this.gameState.placeSimpleObject(tx, ty, "quality_sprinkler");
     else if (this.mode === "preserves_jar") ok = this.gameState.placePreservesJar(tx, ty);
+    else if ((this.mode as ToolId) === "scythe") ok = this.gameState.scythe(tx, ty);
     else if ((this.mode as ToolId) === "axe") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
@@ -1069,6 +1103,15 @@ export class WorldScene extends Phaser.Scene {
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
         this.addObjectBody(o.tx, o.ty, TILE_SIZE - 12, TILE_SIZE - 12, 0, 0);
+      } else if (o.obj.id === "weed") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 8, y + 14, TILE_SIZE - 16, TILE_SIZE - 18, 0x2f9e44, 0.92).setOrigin(0);
+        rect.setStrokeStyle(1, 0x1b4332, 0.75);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 18, TILE_SIZE - 18, 9, 12);
       } else if (o.obj.id === "fence") {
         const x = o.tx * this.map.tileWidth;
         const y = o.ty * this.map.tileHeight;

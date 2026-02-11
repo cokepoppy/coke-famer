@@ -357,8 +357,16 @@ test("sprinkler: waters adjacent tilled tiles at day start (sunny)", async ({ pa
     const crafted = s.api.craft("sprinkler", 1);
     if (!crafted.ok) return { ok: false, step: "craft", crafted, inv: s.inventory };
 
-    // Hoe the 4 neighbors but do NOT water them manually.
-    for (const p of adjacent) s.api.useAt(p.tx, p.ty, "hoe");
+    // Find one hoeable neighbor (objects/collisions may block some tiles).
+    let target: { tx: number; ty: number } | null = null;
+    for (const p of adjacent) {
+      const ok = s.api.useAt(p.tx, p.ty, "hoe");
+      if (ok) {
+        target = p;
+        break;
+      }
+    }
+    if (!target) return { ok: false, step: "hoe" };
 
     const placed = s.api.useAt(tx, ty, "sprinkler");
     if (!placed) return { ok: false, step: "place" };
@@ -370,14 +378,54 @@ test("sprinkler: waters adjacent tilled tiles at day start (sunny)", async ({ pa
       if (s.weather === "sunny") break;
     }
 
-    const after = adjacent.map((p) => ({ ...p, tile: s.api.getTile(p.tx, p.ty) }));
+    const after = { tx: target.tx, ty: target.ty, tile: s.api.getTile(target.tx, target.ty) };
     return { ok: true, weather: s.weather, daysSlept, after };
   });
 
   expect(res.ok).toBeTruthy();
   expect((res as any).weather).toBe("sunny");
-  for (const t of (res as any).after) {
-    expect(t.tile.tilled).toBeTruthy();
-    expect(t.tile.watered).toBeTruthy();
-  }
+  expect((res as any).after.tile.tilled).toBeTruthy();
+  expect((res as any).after.tile.watered).toBeTruthy();
+});
+
+test("scythe: clears weeds and gives fiber", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+    const candidates = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 }
+    ];
+
+    let pos: { tx: number; ty: number } | null = null;
+    for (const c of candidates) {
+      if (s.api.spawnWeedAt(c.tx, c.ty)) {
+        pos = c;
+        break;
+      }
+    }
+    if (!pos) {
+      if (s.api.spawnWeedAt(tx, ty)) pos = { tx, ty };
+    }
+    if (!pos) return { ok: false, step: "spawn_failed" };
+
+    const before = { fiber: s.inventory.fiber ?? 0, obj: s.api.getObject(pos.tx, pos.ty) };
+    const acted = s.api.useAt(pos.tx, pos.ty, "scythe");
+    const after = { fiber: s.inventory.fiber ?? 0, obj: s.api.getObject(pos.tx, pos.ty) };
+
+    return { ok: true, before, acted, after };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).before.obj?.id).toBe("weed");
+  expect((res as any).acted).toBeTruthy();
+  expect((res as any).after.obj).toBeNull();
+  expect((res as any).after.fiber).toBeGreaterThan((res as any).before.fiber);
 });

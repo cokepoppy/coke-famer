@@ -1,7 +1,7 @@
 import type { CropId } from "../content/crops";
 import type { ItemId } from "../content/items";
 
-export type ToolId = "hoe" | "watering_can" | "axe" | "pickaxe" | "hand";
+export type ToolId = "hoe" | "watering_can" | "axe" | "pickaxe" | "scythe" | "hand";
 export type ActionId = ToolId | ItemId;
 
 export type TileKey = `${number},${number}`;
@@ -28,6 +28,7 @@ export type PlacedObjectId =
   | "shipping_bin"
   | "wood"
   | "stone"
+  | "weed"
   | "fence"
   | "path"
   | "sprinkler"
@@ -45,7 +46,7 @@ export type ShippingBinState = {
 };
 
 export type ResourceState = {
-  id: "wood" | "stone";
+  id: "wood" | "stone" | "weed";
   hp: number;
 };
 
