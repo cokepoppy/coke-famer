@@ -31,6 +31,9 @@ declare global {
         load: () => void;
         reset: () => void;
         useAt: (tx: number, ty: number, mode?: string) => boolean;
+        setMode: (mode: string) => void;
+        getTile: (tx: number, ty: number) => { tilled: boolean; watered: boolean; crop: unknown };
+        getObject: (tx: number, ty: number) => { id: string } | null;
         setPaused: (paused: boolean) => void;
         invPickup: (index: number) => { itemId: string; qty: number } | null;
         invSplitHalf: (index: number) => { itemId: string; qty: number } | null;

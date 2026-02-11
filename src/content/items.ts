@@ -15,6 +15,8 @@ export type ItemId =
   | "stone"
   | "fence"
   | "path"
+  | "sprinkler"
+  | "quality_sprinkler"
   | "preserves_jar"
   | "chest";
 
@@ -43,6 +45,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   stone: { id: "stone", name: "Stone", maxStack: 999, buyPrice: null, sellPrice: 2 },
   fence: { id: "fence", name: "Fence", maxStack: 999, buyPrice: null, sellPrice: 1 },
   path: { id: "path", name: "Path", maxStack: 999, buyPrice: null, sellPrice: 1 },
+  sprinkler: { id: "sprinkler", name: "Sprinkler", maxStack: 999, buyPrice: null, sellPrice: 25 },
+  quality_sprinkler: { id: "quality_sprinkler", name: "Quality Sprinkler", maxStack: 999, buyPrice: null, sellPrice: 60 },
   preserves_jar: { id: "preserves_jar", name: "Preserves Jar", maxStack: 999, buyPrice: null, sellPrice: 50 },
   chest: { id: "chest", name: "Chest", maxStack: 999, buyPrice: 200, sellPrice: 50 }
 };

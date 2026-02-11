@@ -23,7 +23,16 @@ export type InventorySlot = {
   qty: number;
 };
 
-export type PlacedObjectId = "chest" | "shipping_bin" | "wood" | "stone" | "fence" | "path" | "preserves_jar";
+export type PlacedObjectId =
+  | "chest"
+  | "shipping_bin"
+  | "wood"
+  | "stone"
+  | "fence"
+  | "path"
+  | "sprinkler"
+  | "quality_sprinkler"
+  | "preserves_jar";
 
 export type ChestState = {
   id: "chest";
@@ -41,7 +50,7 @@ export type ResourceState = {
 };
 
 export type SimplePlacedState = {
-  id: "fence" | "path";
+  id: "fence" | "path" | "sprinkler" | "quality_sprinkler";
 };
 
 export type PreservesJarState = {

@@ -402,7 +402,7 @@ export class FarmGame {
     return { ok: true };
   }
 
-  placeSimpleObject(tx: number, ty: number, id: "fence" | "path"): boolean {
+  placeSimpleObject(tx: number, ty: number, id: "fence" | "path" | "sprinkler" | "quality_sprinkler"): boolean {
     const key = tileKey(tx, ty);
     if (this.objects.has(key)) return false;
     const t = this.getTile(tx, ty);
@@ -412,7 +412,7 @@ export class FarmGame {
     return true;
   }
 
-  pickupSimpleObject(tx: number, ty: number, id: "fence" | "path"): boolean {
+  pickupSimpleObject(tx: number, ty: number, id: "fence" | "path" | "sprinkler" | "quality_sprinkler"): boolean {
     const key = tileKey(tx, ty);
     const obj = this.objects.get(key);
     if (!obj || obj.id !== id) return false;
@@ -861,6 +861,8 @@ export class FarmGame {
       }
     }
 
+    this.applySprinklers();
+
     this.saveToStorage();
     return { shipped };
   }
@@ -869,6 +871,45 @@ export class FarmGame {
     const cal = calendarFromDay(this.day);
     const weather = weatherForDay(this.day);
     return { ...cal, weather };
+  }
+
+  private applySprinklers(): void {
+    const tryWater = (tx: number, ty: number) => {
+      if (this.hasBlockingObject(tx, ty)) return;
+      const state = this.getTile(tx, ty);
+      if (!state.tilled || state.watered) return;
+      state.watered = true;
+      this.setTile(tx, ty, state);
+    };
+
+    for (const [k, obj] of this.objects.entries()) {
+      if (obj.id !== "sprinkler" && obj.id !== "quality_sprinkler") continue;
+      const [txStr, tyStr] = k.split(",");
+      const tx = Number(txStr);
+      const ty = Number(tyStr);
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+
+      const offsets =
+        obj.id === "sprinkler"
+          ? [
+              { dx: 1, dy: 0 },
+              { dx: -1, dy: 0 },
+              { dx: 0, dy: 1 },
+              { dx: 0, dy: -1 }
+            ]
+          : [
+              { dx: 1, dy: 0 },
+              { dx: -1, dy: 0 },
+              { dx: 0, dy: 1 },
+              { dx: 0, dy: -1 },
+              { dx: 1, dy: 1 },
+              { dx: 1, dy: -1 },
+              { dx: -1, dy: 1 },
+              { dx: -1, dy: -1 }
+            ];
+
+      for (const o of offsets) tryWater(tx + o.dx, ty + o.dy);
+    }
   }
 }
 

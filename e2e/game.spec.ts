@@ -331,3 +331,53 @@ test("shipping: put produce in shipping bin and sell overnight", async ({ page }
   expect((res as any).gold1).toBeGreaterThan((res as any).gold0);
   expect((res as any).nonEmpty).toBeFalsy();
 });
+
+test("sprinkler: waters adjacent tilled tiles at day start (sunny)", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+
+    const adjacent = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 }
+    ];
+
+    for (let i = 0; i < 12 && ((s.inventory.wood ?? 0) < 5 || (s.inventory.stone ?? 0) < 10); i++) {
+      for (const p of adjacent) s.api.useAt(p.tx, p.ty, "axe");
+      for (const p of adjacent) s.api.useAt(p.tx, p.ty, "pickaxe");
+    }
+
+    const crafted = s.api.craft("sprinkler", 1);
+    if (!crafted.ok) return { ok: false, step: "craft", crafted, inv: s.inventory };
+
+    // Hoe the 4 neighbors but do NOT water them manually.
+    for (const p of adjacent) s.api.useAt(p.tx, p.ty, "hoe");
+
+    const placed = s.api.useAt(tx, ty, "sprinkler");
+    if (!placed) return { ok: false, step: "place" };
+
+    let daysSlept = 0;
+    while (daysSlept < 7) {
+      s.api.sleep();
+      daysSlept += 1;
+      if (s.weather === "sunny") break;
+    }
+
+    const after = adjacent.map((p) => ({ ...p, tile: s.api.getTile(p.tx, p.ty) }));
+    return { ok: true, weather: s.weather, daysSlept, after };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).weather).toBe("sunny");
+  for (const t of (res as any).after) {
+    expect(t.tile.tilled).toBeTruthy();
+    expect(t.tile.watered).toBeTruthy();
+  }
+});

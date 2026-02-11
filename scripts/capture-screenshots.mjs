@@ -271,6 +271,37 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "10-shipping.png"), fullPage: true });
 
+    // 11: sprinkler (auto watering at day start)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+
+      const adjacent = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+
+      for (let i = 0; i < 12 && ((s.inventory.wood ?? 0) < 5 || (s.inventory.stone ?? 0) < 10); i++) {
+        for (const p of adjacent) s.api.useAt(p.tx, p.ty, "axe");
+        for (const p of adjacent) s.api.useAt(p.tx, p.ty, "pickaxe");
+      }
+
+      s.api.craft("sprinkler", 1);
+
+      for (const p of adjacent) s.api.useAt(p.tx, p.ty, "hoe");
+      s.api.useAt(tx, ty, "sprinkler");
+
+      for (let i = 0; i < 7; i++) {
+        s.api.sleep();
+        if (s.weather === "sunny") break;
+      }
+    });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "11-sprinkler.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

@@ -45,7 +45,9 @@ export function mountHud(containerId: string): void {
     `Parsnip: <span id="hud-parsnip">0</span> | ` +
     `Wood: <span id="hud-wood">0</span> | ` +
     `Stone: <span id="hud-stone">0</span> | ` +
-    `Chest: <span id="hud-chest">0</span>`;
+    `Chest: <span id="hud-chest">0</span> | ` +
+    `Sprinkler: <span id="hud-sprinkler">0</span> | ` +
+    `QSprinkler: <span id="hud-quality-sprinkler">0</span>`;
 
   right.appendChild(button("Sleep", "btn-sleep"));
   right.appendChild(button("Pause", "btn-pause"));
@@ -62,7 +64,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "0-9: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
+  subHint.textContent = "0-9,-,=: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | C: Craft | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -95,6 +97,8 @@ export function mountHud(containerId: string): void {
   const hudWood = document.getElementById("hud-wood")!;
   const hudStone = document.getElementById("hud-stone")!;
   const hudChest = document.getElementById("hud-chest")!;
+  const hudSprinkler = document.getElementById("hud-sprinkler")!;
+  const hudQualitySprinkler = document.getElementById("hud-quality-sprinkler")!;
 
   const hudHotbar = document.getElementById("hud-hotbar")!;
 
@@ -201,7 +205,9 @@ export function mountHud(containerId: string): void {
       { key: "pickaxe", label: "7 Pick" },
       { key: "fence", label: `8 Fence (${inventory.fence ?? 0})` },
       { key: "path", label: `9 Path (${inventory.path ?? 0})` },
-      { key: "preserves_jar", label: `0 Jar (${inventory.preserves_jar ?? 0})` }
+      { key: "preserves_jar", label: `0 Jar (${inventory.preserves_jar ?? 0})` },
+      { key: "sprinkler", label: `- Sprinkler (${inventory.sprinkler ?? 0})` },
+      { key: "quality_sprinkler", label: `= QSprinkler (${inventory.quality_sprinkler ?? 0})` }
     ];
     hudHotbar.innerHTML = "";
     for (const e of entries) {
@@ -228,6 +234,8 @@ export function mountHud(containerId: string): void {
       hudWood.textContent = String(s.inventory.wood ?? 0);
       hudStone.textContent = String(s.inventory.stone ?? 0);
       hudChest.textContent = String(s.inventory.chest ?? 0);
+      hudSprinkler.textContent = String(s.inventory.sprinkler ?? 0);
+      hudQualitySprinkler.textContent = String(s.inventory.quality_sprinkler ?? 0);
       hudTime.textContent = s.timeText ?? "?";
       hudEnergy.textContent = `${s.energy ?? "?"}/${s.energyMax ?? "?"}`;
       hudGold.textContent = String(s.gold ?? 0);

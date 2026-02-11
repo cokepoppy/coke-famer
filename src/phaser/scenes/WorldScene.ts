@@ -288,6 +288,8 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "8") this.setMode("fence" as any);
       if (ev.key === "9") this.setMode("path" as any);
       if (ev.key === "0") this.setMode("preserves_jar" as any);
+      if (ev.key === "-" || ev.key === "_") this.setMode("sprinkler" as any);
+      if (ev.key === "=" || ev.key === "+") this.setMode("quality_sprinkler" as any);
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -356,6 +358,15 @@ export class WorldScene extends Phaser.Scene {
         useAt: (tx: number, ty: number, mode?: string) => {
           if (mode) this.setMode(mode as ActionId);
           return this.applyActionAt(tx, ty);
+        },
+        setMode: (mode: string) => {
+          this.setMode(mode as ActionId);
+        },
+        getTile: (tx: number, ty: number) => {
+          return this.gameState.getTile(tx, ty);
+        },
+        getObject: (tx: number, ty: number) => {
+          return this.gameState.getObject(tx, ty);
         },
         setPaused: (paused: boolean) => {
           this.setPaused(paused);
@@ -666,6 +677,8 @@ export class WorldScene extends Phaser.Scene {
       stone: this.gameState?.countItem("stone" as any) ?? 0,
       fence: this.gameState?.countItem("fence" as any) ?? 0,
       path: this.gameState?.countItem("path" as any) ?? 0,
+      sprinkler: this.gameState?.countItem("sprinkler" as any) ?? 0,
+      quality_sprinkler: this.gameState?.countItem("quality_sprinkler" as any) ?? 0,
       preserves_jar: this.gameState?.countItem("preserves_jar" as any) ?? 0,
       chest: this.gameState?.countItem("chest" as any) ?? 0
     };
@@ -899,7 +912,12 @@ export class WorldScene extends Phaser.Scene {
 
     const cropIdFromSeed = Object.values(CROPS).find((c) => c.seedItemId === this.mode)?.id ?? null;
     const isSeedMode = Boolean(cropIdFromSeed);
-    const isPlaceableMode = this.mode === "fence" || this.mode === "path" || this.mode === "preserves_jar";
+    const isPlaceableMode =
+      this.mode === "fence" ||
+      this.mode === "path" ||
+      this.mode === "sprinkler" ||
+      this.mode === "quality_sprinkler" ||
+      this.mode === "preserves_jar";
 
     if (
       this.mode === "hoe" ||
@@ -936,6 +954,8 @@ export class WorldScene extends Phaser.Scene {
     else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
     else if (this.mode === "fence") ok = this.gameState.placeSimpleObject(tx, ty, "fence");
     else if (this.mode === "path") ok = this.gameState.placeSimpleObject(tx, ty, "path");
+    else if (this.mode === "sprinkler") ok = this.gameState.placeSimpleObject(tx, ty, "sprinkler");
+    else if (this.mode === "quality_sprinkler") ok = this.gameState.placeSimpleObject(tx, ty, "quality_sprinkler");
     else if (this.mode === "preserves_jar") ok = this.gameState.placePreservesJar(tx, ty);
     else if ((this.mode as ToolId) === "axe") {
       const obj = this.gameState.getObject(tx, ty);
@@ -966,6 +986,12 @@ export class WorldScene extends Phaser.Scene {
       if (obj?.id === "path") {
         ok = this.gameState.pickupSimpleObject(tx, ty, "path");
         if (ok) this.toast("Picked up path", "info");
+      } else if (obj?.id === "sprinkler") {
+        ok = this.gameState.pickupSimpleObject(tx, ty, "sprinkler");
+        if (ok) this.toast("Picked up sprinkler", "info");
+      } else if (obj?.id === "quality_sprinkler") {
+        ok = this.gameState.pickupSimpleObject(tx, ty, "quality_sprinkler");
+        if (ok) this.toast("Picked up quality sprinkler", "info");
       } else if (obj?.id === "preserves_jar") {
         const res = this.gameState.pickupPreservesJarIfIdle(tx, ty);
         ok = res.ok;
@@ -1060,6 +1086,24 @@ export class WorldScene extends Phaser.Scene {
         rect.setDepth(ENTITY_DEPTH_BASE + y);
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+      } else if (o.obj.id === "sprinkler") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 9, y + 10, TILE_SIZE - 18, TILE_SIZE - 18, 0x74c0fc, 0.92).setOrigin(0);
+        rect.setStrokeStyle(1, 0x1f2630, 0.7);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 18, TILE_SIZE - 18, 9, 10);
+      } else if (o.obj.id === "quality_sprinkler") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 8, y + 9, TILE_SIZE - 16, TILE_SIZE - 16, 0x1864ab, 0.92).setOrigin(0);
+        rect.setStrokeStyle(1, 0x0b2545, 0.75);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 16, TILE_SIZE - 16, 8, 9);
       } else if (o.obj.id === "preserves_jar") {
         const x = o.tx * this.map.tileWidth;
         const y = o.ty * this.map.tileHeight;
