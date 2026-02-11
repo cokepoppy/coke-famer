@@ -42,6 +42,8 @@ export function mountHud(containerId: string): void {
   invLine.innerHTML =
     `Seed: <span id="hud-seed">?</span> x<span id="hud-seedqty">0</span> | ` +
     `Parsnip: <span id="hud-parsnip">0</span> | ` +
+    `Wood: <span id="hud-wood">0</span> | ` +
+    `Stone: <span id="hud-stone">0</span> | ` +
     `Chest: <span id="hud-chest">0</span>`;
 
   right.appendChild(button("Sleep", "btn-sleep"));
@@ -59,7 +61,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "1-5: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | P: Pause";
+  subHint.textContent = "1-7: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -89,6 +91,8 @@ export function mountHud(containerId: string): void {
   const hudSeed = document.getElementById("hud-seed")!;
   const hudSeedQty = document.getElementById("hud-seedqty")!;
   const hudParsnip = document.getElementById("hud-parsnip")!;
+  const hudWood = document.getElementById("hud-wood")!;
+  const hudStone = document.getElementById("hud-stone")!;
   const hudChest = document.getElementById("hud-chest")!;
 
   const hudHotbar = document.getElementById("hud-hotbar")!;
@@ -164,7 +168,9 @@ export function mountHud(containerId: string): void {
       { key: "watering_can", label: "2 Water" },
       { key: seedId, label: `3 Seed: ${seedId} (${seedQty})` },
       { key: "hand", label: "4 Hand" },
-      { key: "chest", label: `5 Chest (${inventory.chest ?? 0})` }
+      { key: "chest", label: `5 Chest (${inventory.chest ?? 0})` },
+      { key: "axe", label: "6 Axe" },
+      { key: "pickaxe", label: "7 Pick" }
     ];
     hudHotbar.innerHTML = "";
     for (const e of entries) {
@@ -188,6 +194,8 @@ export function mountHud(containerId: string): void {
       hudSeed.textContent = sel;
       hudSeedQty.textContent = String(s.inventory[sel] ?? 0);
       hudParsnip.textContent = String(s.inventory.parsnip ?? 0);
+      hudWood.textContent = String(s.inventory.wood ?? 0);
+      hudStone.textContent = String(s.inventory.stone ?? 0);
       hudChest.textContent = String(s.inventory.chest ?? 0);
       hudTime.textContent = s.timeText ?? "?";
       hudEnergy.textContent = `${s.energy ?? "?"}/${s.energyMax ?? "?"}`;

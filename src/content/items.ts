@@ -7,6 +7,8 @@ export type ItemId =
   | "blueberry"
   | "cranberry_seed"
   | "cranberry"
+  | "wood"
+  | "stone"
   | "chest";
 
 export type ItemDef = {
@@ -26,5 +28,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   blueberry: { id: "blueberry", name: "Blueberry", maxStack: 999, buyPrice: null, sellPrice: 50 },
   cranberry_seed: { id: "cranberry_seed", name: "Cranberry Seeds", maxStack: 999, buyPrice: 100, sellPrice: 50 },
   cranberry: { id: "cranberry", name: "Cranberry", maxStack: 999, buyPrice: null, sellPrice: 75 },
+  wood: { id: "wood", name: "Wood", maxStack: 999, buyPrice: null, sellPrice: 2 },
+  stone: { id: "stone", name: "Stone", maxStack: 999, buyPrice: null, sellPrice: 2 },
   chest: { id: "chest", name: "Chest", maxStack: 999, buyPrice: 200, sellPrice: 50 }
 };

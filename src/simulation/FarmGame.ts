@@ -22,19 +22,27 @@ const ENERGY_MAX = 270;
 const INVENTORY_SIZE = 24;
 const START_GOLD = 500;
 const CHEST_SIZE = 24;
+const WOOD_NODE_HP = 3;
+const STONE_NODE_HP = 3;
+const WOOD_NODE_DROP = 5;
+const STONE_NODE_DROP = 5;
 
 const ACTION_MINUTES = {
   hoe: 10,
   water: 10,
   plant: 10,
-  harvest: 5
+  harvest: 5,
+  chop: 10,
+  mine: 10
 } as const;
 
 const ACTION_ENERGY = {
   hoe: 2,
   water: 2,
   plant: 2,
-  harvest: 0
+  harvest: 0,
+  chop: 4,
+  mine: 4
 } as const;
 
 function tileKey(tx: number, ty: number): TileKey {
@@ -211,6 +219,16 @@ export class FarmGame {
     if (t.crop) return false;
     if (!this.consumeItem("chest", 1)) return false;
     this.objects.set(key, { id: "chest", slots: Array.from({ length: CHEST_SIZE }, () => null) });
+    return true;
+  }
+
+  placeResource(tx: number, ty: number, kind: "wood" | "stone", hp?: number): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop || t.tilled || t.watered) return false;
+    const nodeHp = hp ?? (kind === "wood" ? WOOD_NODE_HP : STONE_NODE_HP);
+    this.objects.set(key, { id: kind, hp: Math.max(1, nodeHp) });
     return true;
   }
 
@@ -459,7 +477,12 @@ export class FarmGame {
     this.energy = Math.max(0, this.energy - ACTION_ENERGY[action]);
   }
 
+  private hasBlockingObject(tx: number, ty: number): boolean {
+    return this.objects.has(tileKey(tx, ty));
+  }
+
   hoe(tx: number, ty: number): boolean {
+    if (this.hasBlockingObject(tx, ty)) return false;
     const state = this.getTile(tx, ty);
     if (state.tilled) return false;
     if (!this.canSpendEnergy(ACTION_ENERGY.hoe)) return false;
@@ -471,6 +494,7 @@ export class FarmGame {
   }
 
   water(tx: number, ty: number): boolean {
+    if (this.hasBlockingObject(tx, ty)) return false;
     const state = this.getTile(tx, ty);
     if (!state.tilled) return false;
     if (state.watered) return false;
@@ -485,6 +509,7 @@ export class FarmGame {
     const def = CROPS[cropId];
     const { season } = calendarFromDay(this.day);
     if (!def.seasons.includes(season)) return false;
+    if (this.hasBlockingObject(tx, ty)) return false;
     const state = this.getTile(tx, ty);
     if (!state.tilled) return false;
     if (state.crop) return false;
@@ -505,6 +530,7 @@ export class FarmGame {
   }
 
   harvest(tx: number, ty: number): boolean {
+    if (this.hasBlockingObject(tx, ty)) return false;
     const state = this.getTile(tx, ty);
     if (!state.crop) return false;
     const def = CROPS[state.crop.cropId];
@@ -514,6 +540,34 @@ export class FarmGame {
     state.crop = null;
     this.setTile(tx, ty, state);
     this.spend("harvest");
+    return true;
+  }
+
+  chop(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "wood") return false;
+    if (!this.canSpendEnergy(ACTION_ENERGY.chop)) return false;
+    obj.hp -= 1;
+    if (obj.hp <= 0) {
+      this.objects.delete(key);
+      this.addItem("wood", WOOD_NODE_DROP);
+    }
+    this.spend("chop");
+    return true;
+  }
+
+  mine(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "stone") return false;
+    if (!this.canSpendEnergy(ACTION_ENERGY.mine)) return false;
+    obj.hp -= 1;
+    if (obj.hp <= 0) {
+      this.objects.delete(key);
+      this.addItem("stone", STONE_NODE_DROP);
+    }
+    this.spend("mine");
     return true;
   }
 

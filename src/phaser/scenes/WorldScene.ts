@@ -44,6 +44,7 @@ export class WorldScene extends Phaser.Scene {
   private objectLayer!: Phaser.GameObjects.Layer;
   private objectVisuals = new Map<string, Phaser.GameObjects.Rectangle>();
   private selectedSeed: ItemId = "parsnip_seed";
+  private isFreshGame = false;
 
   preload(): void {
     this.load.tilemapTiledJSON(
@@ -250,8 +251,9 @@ export class WorldScene extends Phaser.Scene {
     this.reticle = this.add.graphics();
     this.reticle.setDepth(overheadDepth + 100);
 
-    this.gameState = FarmGame.loadFromStorage() ?? FarmGame.newGame();
-    this.gameState.saveToStorage();
+    const loaded = FarmGame.loadFromStorage();
+    this.isFreshGame = !loaded;
+    this.gameState = loaded ?? FarmGame.newGame();
 
     this.farmLayer = this.add.layer();
     this.farmLayer.setDepth(ENTITY_DEPTH_BASE - 10);
@@ -260,7 +262,6 @@ export class WorldScene extends Phaser.Scene {
     this.objectLayer.setDepth(ENTITY_DEPTH_BASE + 1);
 
     this.redrawAllFarmTiles();
-    this.redrawAllObjects();
 
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
       this.drawReticle(pointer);
@@ -275,6 +276,8 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "3") this.setMode(this.selectedSeed as any);
       if (ev.key === "4") this.setMode("hand");
       if (ev.key === "5") this.setMode("chest");
+      if (ev.key === "6") this.setMode("axe");
+      if (ev.key === "7") this.setMode("pickaxe");
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -283,6 +286,10 @@ export class WorldScene extends Phaser.Scene {
     const initTy = this.map.worldToTileY(this.player.y) ?? 0;
     this.playerTile = { tx: initTx, ty: initTy };
     this.drawReticle(this.input.activePointer);
+
+    if (this.isFreshGame) this.seedDemoResources();
+    this.gameState.saveToStorage();
+    this.redrawAllObjects();
 
     window.__cokeFamer = {
       ready: true,
@@ -321,7 +328,9 @@ export class WorldScene extends Phaser.Scene {
           this.gameState.resetToNewGame();
           this.activeChest = null;
           this.redrawAllFarmTiles();
+          this.seedDemoResources();
           this.redrawAllObjects();
+          this.gameState.saveToStorage();
           this.syncWindowState();
         },
         useAt: (tx: number, ty: number, mode?: string) => {
@@ -551,6 +560,8 @@ export class WorldScene extends Phaser.Scene {
       potato_seed: this.gameState?.countItem("potato_seed" as any) ?? 0,
       blueberry_seed: this.gameState?.countItem("blueberry_seed" as any) ?? 0,
       cranberry_seed: this.gameState?.countItem("cranberry_seed" as any) ?? 0,
+      wood: this.gameState?.countItem("wood" as any) ?? 0,
+      stone: this.gameState?.countItem("stone" as any) ?? 0,
       chest: this.gameState?.countItem("chest" as any) ?? 0
     };
     window.__cokeFamer.gold = this.gameState?.gold ?? window.__cokeFamer.gold;
@@ -611,6 +622,40 @@ export class WorldScene extends Phaser.Scene {
     this.toast("No seeds to cycle", "warn");
   }
 
+  private seedDemoResources(): void {
+    // Don't auto-seed if the player already has any non-chest objects (avoid surprising existing saves).
+    const hasNonChest = this.gameState.getAllObjects().some((o) => o.obj.id !== "chest");
+    if (hasNonChest) return;
+
+    const base = { tx: this.playerTile.tx, ty: this.playerTile.ty };
+
+    const candidates: Array<{ tx: number; ty: number }> = [];
+    const maxDist = 10;
+    for (let d = 3; d <= maxDist; d++) {
+      for (let dx = -d; dx <= d; dx++) {
+        const dy = d - Math.abs(dx);
+        candidates.push({ tx: base.tx + dx, ty: base.ty + dy });
+        if (dy !== 0) candidates.push({ tx: base.tx + dx, ty: base.ty - dy });
+      }
+    }
+
+    const placeMany = (kind: "wood" | "stone", count: number) => {
+      let placed = 0;
+      for (const c of candidates) {
+        if (placed >= count) break;
+        if (c.tx < 0 || c.ty < 0 || c.tx >= this.map.width || c.ty >= this.map.height) continue;
+        const blocked = this.collisionsLayer.getTileAt(c.tx, c.ty, true);
+        const isBlocked = Boolean(blocked?.properties?.collide);
+        if (isBlocked) continue;
+        if (c.tx === base.tx && c.ty === base.ty) continue;
+        if (this.gameState.placeResource(c.tx, c.ty, kind)) placed += 1;
+      }
+    };
+
+    placeMany("wood", 6);
+    placeMany("stone", 6);
+  }
+
   private applyActionAt(tx: number, ty: number): boolean {
     const blocked = this.collisionsLayer.getTileAt(tx, ty, true);
     const isBlocked = Boolean(blocked?.properties?.collide);
@@ -626,7 +671,13 @@ export class WorldScene extends Phaser.Scene {
     const cropIdFromSeed = Object.values(CROPS).find((c) => c.seedItemId === this.mode)?.id ?? null;
     const isSeedMode = Boolean(cropIdFromSeed);
 
-    if (this.mode === "hoe" || this.mode === "watering_can" || isSeedMode) {
+    if (
+      this.mode === "hoe" ||
+      this.mode === "watering_can" ||
+      this.mode === "axe" ||
+      this.mode === "pickaxe" ||
+      isSeedMode
+    ) {
       if (this.gameState.energy <= 0) {
         this.toast("No energy", "warn");
         if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok: false, tx, ty };
@@ -646,6 +697,8 @@ export class WorldScene extends Phaser.Scene {
     else if (this.mode === "watering_can") ok = this.gameState.water(tx, ty);
     else if (isSeedMode) ok = this.gameState.plant(tx, ty, cropIdFromSeed!);
     else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
+    else if ((this.mode as ToolId) === "axe") ok = this.gameState.chop(tx, ty);
+    else if ((this.mode as ToolId) === "pickaxe") ok = this.gameState.mine(tx, ty);
     else if ((this.mode as ToolId) === "hand") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
@@ -676,6 +729,22 @@ export class WorldScene extends Phaser.Scene {
         const y = o.ty * this.map.tileHeight;
         const rect = this.add.rectangle(x + 4, y + 8, TILE_SIZE - 8, TILE_SIZE - 8, 0x8b5a2b, 0.9).setOrigin(0);
         rect.setStrokeStyle(1, 0x3b2a18, 0.8);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+      } else if (o.obj.id === "wood") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 6, y + 10, TILE_SIZE - 12, TILE_SIZE - 12, 0x6f4e37, 0.95).setOrigin(0);
+        rect.setStrokeStyle(1, 0x3b2a18, 0.75);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+      } else if (o.obj.id === "stone") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 6, y + 10, TILE_SIZE - 12, TILE_SIZE - 12, 0x8b939a, 0.95).setOrigin(0);
+        rect.setStrokeStyle(1, 0x2b2f33, 0.75);
         rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);

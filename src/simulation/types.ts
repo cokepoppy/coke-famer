@@ -1,7 +1,7 @@
 import type { CropId } from "../content/crops";
 import type { ItemId } from "../content/items";
 
-export type ToolId = "hoe" | "watering_can" | "hand";
+export type ToolId = "hoe" | "watering_can" | "axe" | "pickaxe" | "hand";
 export type ActionId = ToolId | ItemId;
 
 export type TileKey = `${number},${number}`;
@@ -23,14 +23,19 @@ export type InventorySlot = {
   qty: number;
 };
 
-export type PlacedObjectId = "chest";
+export type PlacedObjectId = "chest" | "wood" | "stone";
 
 export type ChestState = {
   id: "chest";
   slots: Array<InventorySlot | null>;
 };
 
-export type PlacedObjectState = ChestState;
+export type ResourceState = {
+  id: "wood" | "stone";
+  hp: number;
+};
+
+export type PlacedObjectState = ChestState | ResourceState;
 
 export type GameSaveV0 = {
   version: 0;
