@@ -10,6 +10,7 @@ export type CropState = {
   cropId: CropId;
   stage: number; // 0..maxStage (maxStage means harvestable)
   daysInStage: number;
+  harvestsDone?: number;
 };
 
 export type TileState = {

@@ -486,3 +486,58 @@ test("tree: plant acorn, grow, and chop for wood", async ({ page }) => {
   expect((res as any).obj2).toBeNull();
   expect((res as any).wood1).toBeGreaterThan((res as any).wood0);
 });
+
+test("regrow crop: blueberry yields multiple and regrows after harvest", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+
+    // Jump to summer so blueberry can be planted.
+    s.api.setDay(29); // Year 1, Summer day 1
+
+    const buy = s.api.shopBuy("blueberry_seed", 1);
+    if (!buy.ok) return { ok: false, step: "buy", buy, season: s.season };
+
+    // Plant on a nearby tile.
+    const target = { tx, ty };
+    s.api.useAt(target.tx, target.ty, "hoe");
+    s.api.useAt(target.tx, target.ty, "watering_can");
+    const planted = s.api.useAt(target.tx, target.ty, "blueberry_seed");
+    if (!planted) return { ok: false, step: "plant" };
+
+    const harvest0 = s.inventory.blueberry ?? 0;
+
+    // Grow to first harvest.
+    for (let i = 0; i < 20; i++) {
+      s.api.useAt(target.tx, target.ty, "watering_can");
+      s.api.sleep();
+      const t = s.api.getTile(target.tx, target.ty);
+      if (t.crop && t.crop.stage >= 4) break;
+    }
+
+    // First harvest.
+    s.api.useAt(target.tx, target.ty, "hand");
+    const harvest1 = s.inventory.blueberry ?? 0;
+
+    // Regrow.
+    for (let i = 0; i < 5; i++) {
+      s.api.useAt(target.tx, target.ty, "watering_can");
+      s.api.sleep();
+    }
+
+    // Second harvest.
+    s.api.useAt(target.tx, target.ty, "hand");
+    const harvest2 = s.inventory.blueberry ?? 0;
+
+    return { ok: true, harvest0, harvest1, harvest2 };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).harvest1).toBeGreaterThanOrEqual((res as any).harvest0 + 3);
+  expect((res as any).harvest2).toBeGreaterThanOrEqual((res as any).harvest1 + 3);
+});

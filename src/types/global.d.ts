@@ -30,6 +30,7 @@ declare global {
         save: () => void;
         load: () => void;
         reset: () => void;
+        setDay: (day: number) => void;
         useAt: (tx: number, ty: number, mode?: string) => boolean;
         setMode: (mode: string) => void;
         getTile: (tx: number, ty: number) => { tilled: boolean; watered: boolean; crop: unknown };

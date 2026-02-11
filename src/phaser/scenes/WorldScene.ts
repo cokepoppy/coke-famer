@@ -357,6 +357,17 @@ export class WorldScene extends Phaser.Scene {
           this.gameState.saveToStorage();
           this.syncWindowState();
         },
+        setDay: (day: number) => {
+          const next = Math.max(1, Math.floor(Number(day)));
+          this.gameState.day = next;
+          this.gameState.minutes = GAME_CONSTANTS.DAY_START_MINUTES;
+          this.ensureShippingBin();
+          this.gameState.refreshDerivedState();
+          this.redrawAllFarmTiles();
+          this.redrawAllObjects();
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+        },
         useAt: (tx: number, ty: number, mode?: string) => {
           if (mode) this.setMode(mode as ActionId);
           return this.applyActionAt(tx, ty);
@@ -678,8 +689,11 @@ export class WorldScene extends Phaser.Scene {
       parsnip_seed: this.gameState?.countItem("parsnip_seed") ?? 0,
       parsnip: this.gameState?.countItem("parsnip") ?? 0,
       potato_seed: this.gameState?.countItem("potato_seed" as any) ?? 0,
+      potato: this.gameState?.countItem("potato" as any) ?? 0,
       blueberry_seed: this.gameState?.countItem("blueberry_seed" as any) ?? 0,
+      blueberry: this.gameState?.countItem("blueberry" as any) ?? 0,
       cranberry_seed: this.gameState?.countItem("cranberry_seed" as any) ?? 0,
+      cranberry: this.gameState?.countItem("cranberry" as any) ?? 0,
       parsnip_jar: this.gameState?.countItem("parsnip_jar" as any) ?? 0,
       potato_jar: this.gameState?.countItem("potato_jar" as any) ?? 0,
       blueberry_jar: this.gameState?.countItem("blueberry_jar" as any) ?? 0,

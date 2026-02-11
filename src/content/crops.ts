@@ -8,6 +8,8 @@ export type CropDef = {
   seedItemId: string;
   produceItemId: string;
   growthDaysPerStage: number[];
+  regrowDays?: number;
+  harvestQty?: number;
   seasons: Season[];
 };
 
@@ -18,6 +20,7 @@ export const CROPS: Record<CropId, CropDef> = {
     seedItemId: "parsnip_seed",
     produceItemId: "parsnip",
     growthDaysPerStage: [1, 1, 1, 1],
+    harvestQty: 1,
     seasons: ["spring"]
   },
   potato: {
@@ -26,6 +29,7 @@ export const CROPS: Record<CropId, CropDef> = {
     seedItemId: "potato_seed",
     produceItemId: "potato",
     growthDaysPerStage: [2, 2, 2, 1],
+    harvestQty: 1,
     seasons: ["spring"]
   },
   blueberry: {
@@ -34,6 +38,8 @@ export const CROPS: Record<CropId, CropDef> = {
     seedItemId: "blueberry_seed",
     produceItemId: "blueberry",
     growthDaysPerStage: [3, 3, 4, 3],
+    regrowDays: 4,
+    harvestQty: 3,
     seasons: ["summer"]
   },
   cranberry: {
@@ -42,6 +48,8 @@ export const CROPS: Record<CropId, CropDef> = {
     seedItemId: "cranberry_seed",
     produceItemId: "cranberry",
     growthDaysPerStage: [3, 4, 4, 4],
+    regrowDays: 5,
+    harvestQty: 2,
     seasons: ["fall"]
   }
 };

@@ -792,7 +792,7 @@ export class FarmGame {
     if (state.crop) return false;
     if (!this.canSpendEnergy(ACTION_ENERGY.plant)) return false;
     if (!this.consumeItem(def.seedItemId as ItemId, 1)) return false;
-    state.crop = { cropId, stage: 0, daysInStage: 0 };
+    state.crop = { cropId, stage: 0, daysInStage: 0, harvestsDone: 0 };
     this.setTile(tx, ty, state);
     this.spend("plant");
     return true;
@@ -813,8 +813,14 @@ export class FarmGame {
     const def = CROPS[state.crop.cropId];
     const harvestStage = def.growthDaysPerStage.length;
     if (state.crop.stage < harvestStage) return false;
-    this.addItem(def.produceItemId as ItemId, 1);
-    state.crop = null;
+    this.addItem(def.produceItemId as ItemId, Math.max(1, def.harvestQty ?? 1));
+    if (def.regrowDays && def.regrowDays > 0) {
+      state.crop.stage = Math.max(0, harvestStage - 1);
+      state.crop.daysInStage = 0;
+      state.crop.harvestsDone = (state.crop.harvestsDone ?? 0) + 1;
+    } else {
+      state.crop = null;
+    }
     this.setTile(tx, ty, state);
     this.spend("harvest");
     return true;
@@ -880,7 +886,8 @@ export class FarmGame {
       if (state.crop.stage >= harvestStage) continue;
 
       state.crop.daysInStage += 1;
-      const needed = def.growthDaysPerStage[state.crop.stage] ?? 1;
+      const isRegrowStage = Boolean(def.regrowDays) && (state.crop.harvestsDone ?? 0) > 0 && state.crop.stage === harvestStage - 1;
+      const needed = isRegrowStage ? (def.regrowDays ?? 1) : (def.growthDaysPerStage[state.crop.stage] ?? 1);
       if (state.crop.daysInStage >= needed) {
         state.crop.stage += 1;
         state.crop.daysInStage = 0;

@@ -358,6 +358,38 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "13-tree.png"), fullPage: true });
 
+    // 14: regrow crops (blueberry multiple harvest)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+      s.api.setDay(29);
+      s.api.shopBuy("blueberry_seed", 1);
+
+      s.api.useAt(tx, ty, "hoe");
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.useAt(tx, ty, "blueberry_seed");
+
+      // Grow and harvest once.
+      for (let i = 0; i < 20; i++) {
+        s.api.useAt(tx, ty, "watering_can");
+        s.api.sleep();
+        const t = s.api.getTile(tx, ty);
+        if (t.crop && t.crop.stage >= 4) break;
+      }
+      s.api.useAt(tx, ty, "hand");
+
+      // Regrow and harvest again.
+      for (let i = 0; i < 5; i++) {
+        s.api.useAt(tx, ty, "watering_can");
+        s.api.sleep();
+      }
+      s.api.useAt(tx, ty, "hand");
+    });
+    await page.keyboard.press("i");
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "14-regrow.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");
