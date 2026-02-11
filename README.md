@@ -10,6 +10,7 @@
 ![Shop](docs/screenshots/04-shop.png)
 ![Dialogue](docs/screenshots/17-dialogue.png)
 ![Gift](docs/screenshots/18-gift.png)
+![Eat](docs/screenshots/19-eat.png)
 
 ## 运行
 

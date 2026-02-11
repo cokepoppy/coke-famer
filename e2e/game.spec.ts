@@ -692,3 +692,65 @@ test("npc: gifting consumes item and changes friendship", async ({ page }) => {
   expect((res as any).afterFriend).not.toBe((res as any).beforeFriend);
   expect((res as any).afterWood).toBeLessThan((res as any).beforeWood);
 });
+
+test("food: eat cursor stack restores energy", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+
+    // Harvest one parsnip produce.
+    s.api.useAt(tx, ty, "hoe");
+    s.api.useAt(tx, ty, "watering_can");
+    s.api.useAt(tx, ty, "parsnip_seed");
+    for (let i = 0; i < 4; i++) {
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.sleep();
+    }
+    s.api.useAt(tx, ty, "hand");
+
+    // Spend some energy so eating has an effect.
+    const adjacent = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 }
+    ];
+    let spent = false;
+    for (const p of adjacent) {
+      if (s.api.useAt(p.tx, p.ty, "hoe")) {
+        spent = true;
+        s.api.useAt(p.tx, p.ty, "watering_can");
+        break;
+      }
+    }
+    if (!spent) {
+      for (const p of adjacent) {
+        if (s.api.useAt(p.tx, p.ty, "axe")) {
+          spent = true;
+          break;
+        }
+      }
+    }
+
+    const energy0 = s.energy ?? 0;
+    const slots = s.inventorySlots ?? [];
+    const idx = slots.findIndex((it: any) => it?.itemId === "parsnip");
+    if (idx < 0) return { ok: false, step: "no_parsnip", energy0 };
+
+    const picked = s.api.invPickup(idx);
+    if (!picked) return { ok: false, step: "pickup", energy0 };
+    const eaten = s.api.eatStack(picked);
+    const energy1 = s.energy ?? 0;
+    return { ok: true, energy0, energy1, eaten };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).eaten.ok).toBeTruthy();
+  expect((res as any).energy1).toBeGreaterThan((res as any).energy0);
+});

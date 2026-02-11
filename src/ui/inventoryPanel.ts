@@ -26,7 +26,11 @@ export function mountInventoryPanel(host: HTMLElement): {
   const headerRight = el("div", "inv-header-right");
   const sellBtn = el("button", "btn");
   sellBtn.textContent = "Sell Cursor";
+  const eatBtn = el("button", "btn");
+  eatBtn.id = "btn-eat-cursor";
+  eatBtn.textContent = "Eat Cursor (1)";
   headerRight.appendChild(sellBtn);
+  headerRight.appendChild(eatBtn);
   headerRight.appendChild(closeBtn);
   header.appendChild(headerRight);
   panel.appendChild(header);
@@ -121,6 +125,14 @@ export function mountInventoryPanel(host: HTMLElement): {
     if (!cursor) return;
     window.__cokeFamer?.api?.sellStack({ itemId: cursor.itemId, qty: cursor.qty });
     cursor = null;
+    syncCursorLine();
+  };
+
+  eatBtn.onclick = () => {
+    if (!cursor) return;
+    const res = window.__cokeFamer?.api?.eatStack?.(cursor as any) as any;
+    if (!res) return;
+    if (res.ok) cursor = res.remaining;
     syncCursorLine();
   };
 

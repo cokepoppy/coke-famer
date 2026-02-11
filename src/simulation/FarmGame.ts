@@ -111,6 +111,32 @@ export class FarmGame {
     return out;
   }
 
+  eatStack(stack: { itemId: ItemId; qty: number } | null): {
+    ok: boolean;
+    reason?: string;
+    energyGained?: number;
+    remaining: { itemId: ItemId; qty: number } | null;
+  } {
+    if (!stack) return { ok: false, reason: "no_stack", remaining: null };
+    if (!ITEMS[stack.itemId]) return { ok: false, reason: "unknown_item", remaining: stack };
+    const qtyRaw = Number(stack.qty ?? 0);
+    const qty = Number.isFinite(qtyRaw) ? Math.floor(qtyRaw) : 0;
+    if (qty <= 0) return { ok: false, reason: "qty", remaining: null };
+
+    const def = ITEMS[stack.itemId];
+    const restore = Number(def.energyRestore ?? 0);
+    if (!Number.isFinite(restore) || restore <= 0) return { ok: false, reason: "not_edible", remaining: stack };
+    if (this.energy >= ENERGY_MAX) return { ok: false, reason: "full_energy", remaining: stack };
+
+    const before = this.energy;
+    this.energy = Math.min(ENERGY_MAX, this.energy + restore);
+    const gained = this.energy - before;
+
+    const nextQty = qty - 1;
+    const remaining = nextQty > 0 ? { itemId: stack.itemId, qty: nextQty } : null;
+    return { ok: true, energyGained: gained, remaining };
+  }
+
   static newGame(): FarmGame {
     const g = new FarmGame();
     g.day = 1;

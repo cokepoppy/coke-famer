@@ -451,6 +451,48 @@ async function main() {
     await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(outDir, "18-gift.png"), fullPage: true });
 
+    // 19: eating (inventory cursor + eat button)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+      // Harvest one parsnip produce.
+      s.api.useAt(tx, ty, "hoe");
+      s.api.useAt(tx, ty, "watering_can");
+      s.api.useAt(tx, ty, "parsnip_seed");
+      for (let i = 0; i < 4; i++) {
+        s.api.useAt(tx, ty, "watering_can");
+        s.api.sleep();
+      }
+      s.api.useAt(tx, ty, "hand");
+      // Spend some energy on a nearby open tile (so eating can restore).
+      const adjacent = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      for (const p of adjacent) {
+        if (s.api.useAt(p.tx, p.ty, "hoe")) {
+          s.api.useAt(p.tx, p.ty, "watering_can");
+          break;
+        }
+      }
+    });
+    await page.keyboard.press("i");
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      const slots = Array.from(document.querySelectorAll(".inv-panel .inv-slot"));
+      const target = slots.find((slot) => {
+        const name = slot.querySelector(".inv-name");
+        return name?.textContent?.trim() === "parsnip";
+      });
+      if (target) target.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true }));
+    });
+    await page.evaluate(() => document.getElementById("btn-eat-cursor")?.click());
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(outDir, "19-eat.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

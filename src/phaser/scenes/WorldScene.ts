@@ -681,6 +681,16 @@ export class WorldScene extends Phaser.Scene {
           this.activeContainer = null;
           this.activeChest = null;
           this.syncWindowState();
+        },
+        eatStack: (stack: { itemId: string; qty: number } | null) => {
+          const res = this.gameState.eatStack(stack as any);
+          if (res.ok) this.toast(`Ate ${stack?.itemId} (+${res.energyGained ?? 0} energy)`, "info");
+          else if (res.reason === "not_edible") this.toast("Not edible", "warn");
+          else if (res.reason === "full_energy") this.toast("Energy already full", "warn");
+          else this.toast(`Eat failed: ${res.reason ?? "unknown"}`, "warn");
+          this.gameState.saveToStorage(this.saveSlot);
+          this.syncWindowState();
+          return res;
         }
       }
     };

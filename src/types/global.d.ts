@@ -83,6 +83,9 @@ declare global {
         ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
         openShipping: () => void;
         closeContainer: () => void;
+        eatStack: (
+          stack: { itemId: string; qty: number } | null
+        ) => { ok: boolean; reason?: string; energyGained?: number; remaining: { itemId: string; qty: number } | null };
       };
     };
   }
