@@ -2,7 +2,7 @@ import type { CropId } from "../content/crops";
 import type { ItemId } from "../content/items";
 import type { NpcId } from "../content/npcs";
 
-export type ToolId = "hoe" | "watering_can" | "axe" | "pickaxe" | "scythe" | "hand";
+export type ToolId = "hoe" | "watering_can" | "axe" | "pickaxe" | "scythe" | "gift" | "hand";
 export type ActionId = ToolId | ItemId;
 
 export type TileKey = `${number},${number}`;
@@ -36,6 +36,7 @@ export type QuestState = {
 export type RelationshipState = {
   friendship: number; // 0..?
   lastTalkDay: number; // 0 means never
+  lastGiftDay: number; // 0 means never
 };
 
 export type PlacedObjectId =

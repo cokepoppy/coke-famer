@@ -650,3 +650,45 @@ test("npc: talk increases friendship and persists", async ({ page }) => {
 
   expect(afterReload).toBeGreaterThan(0);
 });
+
+test("npc: gifting consumes item and changes friendship", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+
+  await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    s.api.setSaveSlot(3);
+    s.api.reset();
+  });
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const beforeFriend = s.relationships?.townie?.friendship ?? 0;
+    const beforeWood = s.inventory.wood ?? 0;
+    if (beforeWood <= 0) {
+      const { tx, ty } = s.player;
+      const adjacent = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      for (let i = 0; i < 8 && (s.inventory.wood ?? 0) <= 0; i++) {
+        for (const p of adjacent) s.api.useAt(p.tx, p.ty, "axe");
+      }
+    }
+    const woodReady = s.inventory.wood ?? 0;
+    if (woodReady <= 0) return { ok: false, step: "no_wood" };
+
+    const gift = s.api.giftToNpc("townie");
+    const afterFriend = s.relationships?.townie?.friendship ?? 0;
+    const afterWood = s.inventory.wood ?? 0;
+    return { ok: true, gift, beforeFriend, afterFriend, beforeWood: woodReady, afterWood };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).gift.ok).toBeTruthy();
+  expect((res as any).afterFriend).not.toBe((res as any).beforeFriend);
+  expect((res as any).afterWood).toBeLessThan((res as any).beforeWood);
+});

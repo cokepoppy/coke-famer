@@ -24,7 +24,7 @@ declare global {
       toast?: { text: string; kind: "info" | "warn" | "error"; ts: number } | null;
       container?: { kind: string; tx?: number; ty?: number; slots: Array<{ itemId: string; qty: number } | null> } | null;
       quest?: { dayIssued: number; itemId: string; qty: number; rewardGold: number; completed: boolean } | null;
-      relationships?: Record<string, { friendship: number; lastTalkDay: number }>;
+      relationships?: Record<string, { friendship: number; lastTalkDay: number; lastGiftDay: number }>;
       dialogue?: { npcId: string; text: string } | null;
       tilledCount: number;
       lastClick: { tx: number; ty: number; blocked: boolean; toggled: boolean } | null;
@@ -57,6 +57,7 @@ declare global {
         setQuest: (q: any) => void;
         completeQuest: () => { ok: boolean; reason?: string; goldGained?: number };
         talkToNpc: (npcId: string) => { ok: boolean; reason?: string; friendshipGained?: number };
+        giftToNpc: (npcId: string) => { ok: boolean; reason?: string; friendshipGained?: number; itemId?: string; taste?: string };
         closeDialogue: () => void;
         craft: (itemId: string, qty: number) => { ok: boolean; reason?: string };
         sellStack: (stack: { itemId: string; qty: number }) => { ok: boolean; goldGained?: number; reason?: string };

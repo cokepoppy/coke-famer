@@ -57,6 +57,13 @@ export function mountDialoguePanel(host: HTMLElement): {
     const text = el("div", "dialogue-text");
     text.textContent = d.text;
     body.appendChild(text);
+
+    const actions = el("div", "dialogue-actions");
+    const giftBtn = el("button", "btn");
+    giftBtn.textContent = "Gift (G)";
+    giftBtn.onclick = () => window.__cokeFamer?.api?.giftToNpc?.(d.npcId);
+    actions.appendChild(giftBtn);
+    body.appendChild(actions);
   };
 
   return { setOpen, isOpen: () => open, render };

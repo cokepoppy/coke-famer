@@ -52,6 +52,7 @@ const ACTION_MINUTES = {
   plant: 10,
   harvest: 5,
   scythe: 5,
+  gift: 0,
   chop: 10,
   mine: 10
 } as const;
@@ -62,6 +63,7 @@ const ACTION_ENERGY = {
   plant: 2,
   harvest: 0,
   scythe: 0,
+  gift: 0,
   chop: 4,
   mine: 4
 } as const;
@@ -88,6 +90,26 @@ export class FarmGame {
   private objects = new Map<TileKey, PlacedObjectState>();
   private quest: QuestState | null = null;
   private relationships: Partial<Record<NpcId, RelationshipState>> = {};
+
+  private normalizeRelationshipState(state?: Partial<RelationshipState> | null): RelationshipState {
+    const friendshipRaw = Number(state?.friendship ?? 0);
+    const lastTalkDayRaw = Number(state?.lastTalkDay ?? 0);
+    const lastGiftDayRaw = Number((state as any)?.lastGiftDay ?? 0);
+    const friendship = Number.isFinite(friendshipRaw) ? Math.max(0, friendshipRaw) : 0;
+    const lastTalkDay = Number.isFinite(lastTalkDayRaw) ? Math.max(0, Math.floor(lastTalkDayRaw)) : 0;
+    const lastGiftDay = Number.isFinite(lastGiftDayRaw) ? Math.max(0, Math.floor(lastGiftDayRaw)) : 0;
+    return { friendship, lastTalkDay, lastGiftDay };
+  }
+
+  private normalizeRelationships(
+    rels: Partial<Record<NpcId, Partial<RelationshipState> | RelationshipState>> | null | undefined
+  ): Partial<Record<NpcId, RelationshipState>> {
+    const out: Partial<Record<NpcId, RelationshipState>> = {};
+    for (const id of Object.keys(NPCS) as NpcId[]) {
+      out[id] = this.normalizeRelationshipState(rels?.[id] as any);
+    }
+    return out;
+  }
 
   static newGame(): FarmGame {
     const g = new FarmGame();
@@ -212,7 +234,7 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
       g.quest = parsed.quest ?? g.generateQuestForDay(g.day);
-      g.relationships = { ...g.defaultRelationships(), ...(parsed.relationships ?? {}) };
+      g.relationships = g.normalizeRelationships({ ...g.defaultRelationships(), ...(parsed.relationships ?? {}) });
       return g;
     }
     return null;
@@ -328,14 +350,12 @@ export class FarmGame {
   }
 
   getRelationship(npcId: NpcId): RelationshipState {
-    const r = this.relationships[npcId];
-    if (r) return { ...r };
-    return { friendship: 0, lastTalkDay: 0 };
+    return this.normalizeRelationshipState(this.relationships[npcId]);
   }
 
   talkToNpc(npcId: NpcId): { ok: boolean; reason?: string; friendshipGained?: number; relationship?: RelationshipState } {
     if (!NPCS[npcId]) return { ok: false, reason: "unknown_npc" };
-    const current = this.relationships[npcId] ?? { friendship: 0, lastTalkDay: 0 };
+    const current = this.normalizeRelationshipState(this.relationships[npcId]);
     if (current.lastTalkDay === this.day) return { ok: false, reason: "already_talked", relationship: { ...current } };
     const next = { ...current, friendship: current.friendship + 20, lastTalkDay: this.day };
     this.relationships[npcId] = next;
@@ -343,9 +363,35 @@ export class FarmGame {
   }
 
   private defaultRelationships(): Partial<Record<NpcId, RelationshipState>> {
-    const out: Partial<Record<NpcId, RelationshipState>> = {};
-    for (const id of Object.keys(NPCS) as NpcId[]) out[id] = { friendship: 0, lastTalkDay: 0 };
-    return out;
+    return this.normalizeRelationships(null);
+  }
+
+  giftToNpc(npcId: NpcId): {
+    ok: boolean;
+    reason?: string;
+    friendshipGained?: number;
+    itemId?: ItemId;
+    taste?: string;
+    relationship?: RelationshipState;
+  } {
+    const npc = NPCS[npcId];
+    if (!npc) return { ok: false, reason: "unknown_npc" };
+
+    const current = this.normalizeRelationshipState(this.relationships[npcId]);
+    if (current.lastGiftDay === this.day) return { ok: false, reason: "already_gifted", relationship: { ...current } };
+
+    const candidates: ItemId[] = ["blueberry", "cranberry", "potato", "parsnip", "wood", "fiber", "stone"];
+    const itemId = candidates.find((id) => this.countItem(id) > 0) ?? null;
+    if (!itemId) return { ok: false, reason: "no_gift_items", relationship: { ...current } };
+
+    const ok = this.consumeItem(itemId, 1);
+    if (!ok) return { ok: false, reason: "no_gift_items", relationship: { ...current } };
+
+    const taste = npc.giftTastes?.[itemId] ?? "neutral";
+    const delta = taste === "loved" ? 80 : taste === "liked" ? 45 : taste === "disliked" ? -20 : 20;
+    const next = { ...current, friendship: Math.max(0, current.friendship + delta), lastGiftDay: this.day };
+    this.relationships[npcId] = next;
+    return { ok: true, friendshipGained: delta, itemId, taste, relationship: { ...next } };
   }
 
   private generateQuestForDay(day: number): QuestState {

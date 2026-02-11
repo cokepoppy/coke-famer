@@ -69,7 +69,7 @@ export function mountHud(containerId: string): void {
 
   const subHint = el("div", "subhint");
   subHint.textContent =
-    "0-9,-,=,T,R: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | M: Saves | Esc: Close Dialogue | P: Pause";
+    "0-9,-,=,T,R,G: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | M: Saves | Esc: Close Dialogue | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -284,6 +284,7 @@ export function mountHud(containerId: string): void {
       { key: "watering_can", label: "2 Water" },
       { key: seedId, label: `3 Seed: ${seedId} (${seedQty})` },
       { key: "hand", label: "4 Hand" },
+      { key: "gift", label: "G Gift" },
       { key: "chest", label: `5 Chest (${inventory.chest ?? 0})` },
       { key: "axe", label: "6 Axe" },
       { key: "pickaxe", label: "7 Pick" },

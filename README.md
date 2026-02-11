@@ -7,6 +7,9 @@
 ![World](docs/screenshots/01-world.png)
 ![Farming](docs/screenshots/02-farming.png)
 ![Inventory](docs/screenshots/03-inventory.png)
+![Shop](docs/screenshots/04-shop.png)
+![Dialogue](docs/screenshots/17-dialogue.png)
+![Gift](docs/screenshots/18-gift.png)
 
 ## 运行
 

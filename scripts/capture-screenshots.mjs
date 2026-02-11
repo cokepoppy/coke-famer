@@ -428,6 +428,29 @@ async function main() {
     await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(outDir, "17-dialogue.png"), fullPage: true });
 
+    // 18: gifting (NPC tastes)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      // Ensure 1 wood.
+      if ((s.inventory.wood ?? 0) <= 0) {
+        const { tx, ty } = s.player;
+        const adjacent = [
+          { tx: tx + 1, ty },
+          { tx: tx - 1, ty },
+          { tx, ty: ty + 1 },
+          { tx, ty: ty - 1 }
+        ];
+        for (let i = 0; i < 8 && (s.inventory.wood ?? 0) <= 0; i++) {
+          for (const p of adjacent) s.api.useAt(p.tx, p.ty, "axe");
+        }
+      }
+      s.api.talkToNpc("townie");
+      s.api.giftToNpc("townie");
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, "18-gift.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

@@ -34,7 +34,7 @@ function isRunning(pid) {
 async function start() {
   const existingPid = await readPid();
   if (existingPid && isRunning(existingPid)) {
-    console.log(`preview 已在运行（pid=${existingPid}）。访问：http://localhost:4173/`);
+    console.log(`preview 已在运行（pid=${existingPid}）。访问：http://127.0.0.1:4173/ 或 http://localhost:4173/`);
     return;
   }
 
@@ -42,7 +42,7 @@ async function start() {
 
   const child = spawn(
     process.platform === "win32" ? "npm.cmd" : "npm",
-    ["run", "preview", "--", "--host", "::", "--port", "4173", "--strictPort"],
+    ["run", "preview", "--", "--host", "127.0.0.1", "--port", "4173", "--strictPort"],
     {
       cwd: projectRoot,
       detached: true,
@@ -61,7 +61,7 @@ async function start() {
   await fs.writeFile(pidFile, String(child.pid), "utf-8");
   await out.close();
 
-  console.log(`preview 已启动（pid=${child.pid}）。访问：http://localhost:4173/`);
+  console.log(`preview 已启动（pid=${child.pid}）。访问：http://127.0.0.1:4173/ 或 http://localhost:4173/`);
   console.log(`日志：${path.relative(projectRoot, logFile)}`);
 }
 
@@ -102,4 +102,3 @@ if (cmd === "start") {
   console.log("用法：node scripts/preview-daemon.mjs <start|stop|status>");
   process.exit(1);
 }
-

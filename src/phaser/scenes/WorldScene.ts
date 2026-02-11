@@ -302,6 +302,7 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "=" || ev.key === "+") this.setMode("quality_sprinkler" as any);
       if (ev.key.toLowerCase() === "t") this.setMode("scythe");
       if (ev.key.toLowerCase() === "r") this.setMode("acorn" as any);
+      if (ev.key.toLowerCase() === "g") this.setMode("gift");
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -502,6 +503,32 @@ export class WorldScene extends Phaser.Scene {
             this.toast(`Talked to ${name} (+${res.friendshipGained ?? 0})`, "info");
           } else {
             this.toast(`Talk failed: ${res.reason ?? "unknown"}`, "warn");
+          }
+          this.gameState.saveToStorage(this.saveSlot);
+          this.syncWindowState();
+          return res;
+        },
+        giftToNpc: (npcId: string) => {
+          if (npcId !== this.npcId) {
+            const res = { ok: false, reason: "unknown_npc" };
+            this.toast(`Gift failed: ${res.reason}`, "warn");
+            return res;
+          }
+          const res = this.gameState.giftToNpc(this.npcId);
+          if (res.ok) {
+            this.dialogue = {
+              npcId: this.npcId,
+              text: `Thanks for the ${res.itemId}! (${res.taste})`
+            };
+            this.toast(`Gifted ${res.itemId} (${res.taste})`, "info");
+          } else if (res.reason === "already_gifted") {
+            this.dialogue = { npcId: this.npcId, text: "No more gifts today. Thanks!" };
+            this.toast("Already gifted today", "warn");
+          } else if (res.reason === "no_gift_items") {
+            this.dialogue = { npcId: this.npcId, text: "You don't have anything to gift." };
+            this.toast("No gift items", "warn");
+          } else {
+            this.toast(`Gift failed: ${res.reason ?? "unknown"}`, "warn");
           }
           this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
@@ -1196,7 +1223,30 @@ export class WorldScene extends Phaser.Scene {
     else if (this.mode === "quality_sprinkler") ok = this.gameState.placeSimpleObject(tx, ty, "quality_sprinkler");
     else if (this.mode === "preserves_jar") ok = this.gameState.placePreservesJar(tx, ty);
     else if ((this.mode as ToolId) === "scythe") ok = this.gameState.scythe(tx, ty);
-    else if ((this.mode as ToolId) === "axe") {
+    else if ((this.mode as ToolId) === "gift") {
+      if (!this.isNpcAt(tx, ty)) {
+        ok = true;
+        this.toast("No NPC here", "warn");
+      } else {
+        const res = this.gameState.giftToNpc(this.npcId);
+        ok = res.ok;
+        if (ok) {
+          this.dialogue = { npcId: this.npcId, text: `Thanks for the ${res.itemId}! (${res.taste})` };
+          this.toast(`Gifted ${res.itemId} (${res.taste})`, "info");
+          this.gameState.saveToStorage(this.saveSlot);
+        } else if (res.reason === "already_gifted") {
+          ok = true;
+          this.dialogue = { npcId: this.npcId, text: "No more gifts today. Thanks!" };
+          this.toast("Already gifted today", "warn");
+        } else if (res.reason === "no_gift_items") {
+          ok = true;
+          this.dialogue = { npcId: this.npcId, text: "You don't have anything to gift." };
+          this.toast("No gift items", "warn");
+        } else {
+          this.toast(`Gift failed: ${res.reason ?? "unknown"}`, "warn");
+        }
+      }
+    } else if ((this.mode as ToolId) === "axe") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
         const res = this.gameState.pickupChestIfEmpty(tx, ty);
@@ -1240,8 +1290,7 @@ export class WorldScene extends Phaser.Scene {
       } else {
         ok = this.gameState.mine(tx, ty);
       }
-    }
-    else if ((this.mode as ToolId) === "hand") {
+    } else if ((this.mode as ToolId) === "hand") {
       if (this.isNpcAt(tx, ty)) {
         const res = this.gameState.talkToNpc(this.npcId);
         ok = res.ok;
