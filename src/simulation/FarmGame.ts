@@ -29,6 +29,10 @@ const WEED_NODE_HP = 1;
 const WOOD_NODE_DROP = 5;
 const STONE_NODE_DROP = 5;
 const WEED_NODE_DROP = 3;
+const TREE_SEED_DAYS = 3;
+const TREE_SAPLING_DAYS = 3;
+const TREE_HP_BY_STAGE = { 0: 1, 1: 2, 2: 6 } as const;
+const TREE_WOOD_BY_STAGE = { 0: 0, 1: 5, 2: 15 } as const;
 const MINUTES_PER_DAY = 24 * 60;
 const PRESERVES_MINUTES = 180;
 const SHIPPING_BIN_SIZE = 24;
@@ -259,6 +263,19 @@ export class FarmGame {
     }
   }
 
+  private growTreesNextDay(): void {
+    for (const obj of this.objects.values()) {
+      if (obj.id !== "tree") continue;
+      if (obj.stage >= 2) continue;
+      obj.daysInStage += 1;
+      const needed = obj.stage === 0 ? TREE_SEED_DAYS : TREE_SAPLING_DAYS;
+      if (obj.daysInStage < needed) continue;
+      obj.stage = (obj.stage + 1) as 0 | 1 | 2;
+      obj.daysInStage = 0;
+      obj.hp = TREE_HP_BY_STAGE[obj.stage];
+    }
+  }
+
   private preservesOutputFor(input: ItemId): ItemId | null {
     if (input === "parsnip") return "parsnip_jar";
     if (input === "potato") return "potato_jar";
@@ -356,6 +373,18 @@ export class FarmGame {
     if (t.crop || t.tilled || t.watered) return false;
     const nodeHp = hp ?? WEED_NODE_HP;
     this.objects.set(key, { id: "weed", hp: Math.max(1, nodeHp) });
+    return true;
+  }
+
+  plantTree(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop || t.tilled || t.watered) return false;
+    if (!this.canSpendEnergy(ACTION_ENERGY.plant)) return false;
+    if (!this.consumeItem("acorn", 1)) return false;
+    this.objects.set(key, { id: "tree", stage: 0, daysInStage: 0, hp: TREE_HP_BY_STAGE[0] });
+    this.spend("plant");
     return true;
   }
 
@@ -794,12 +823,19 @@ export class FarmGame {
   chop(tx: number, ty: number): boolean {
     const key = tileKey(tx, ty);
     const obj = this.objects.get(key);
-    if (!obj || obj.id !== "wood") return false;
+    if (!obj || (obj.id !== "wood" && obj.id !== "tree")) return false;
     if (!this.canSpendEnergy(ACTION_ENERGY.chop)) return false;
     obj.hp -= 1;
     if (obj.hp <= 0) {
       this.objects.delete(key);
-      this.addItem("wood", WOOD_NODE_DROP);
+      if (obj.id === "wood") {
+        this.addItem("wood", WOOD_NODE_DROP);
+      } else if (obj.id === "tree") {
+        const wood = TREE_WOOD_BY_STAGE[obj.stage];
+        if (wood > 0) this.addItem("wood", wood);
+        // Small deterministic chance: every 2nd day yields one acorn from chopping mature trees.
+        if (obj.stage >= 2 && this.day % 2 === 0) this.addItem("acorn", 1);
+      }
     }
     this.spend("chop");
     return true;
@@ -864,6 +900,7 @@ export class FarmGame {
     this.minutes = DAY_START_MINUTES;
     this.energy = ENERGY_MAX;
     this.updateMachines();
+    this.growTreesNextDay();
 
     // Season change can kill out-of-season crops.
     {

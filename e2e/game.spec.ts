@@ -429,3 +429,60 @@ test("scythe: clears weeds and gives fiber", async ({ page }) => {
   expect((res as any).after.obj).toBeNull();
   expect((res as any).after.fiber).toBeGreaterThan((res as any).before.fiber);
 });
+
+test("tree: plant acorn, grow, and chop for wood", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+
+    const buy = s.api.shopBuy("acorn", 1);
+    if (!buy.ok) return { ok: false, step: "buy", buy };
+
+    const candidates = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 }
+    ];
+
+    const clearIfNeeded = (p: { tx: number; ty: number }) => {
+      const obj = s.api.getObject(p.tx, p.ty);
+      if (!obj) return;
+      if (obj.id === "wood") for (let i = 0; i < 5; i++) s.api.useAt(p.tx, p.ty, "axe");
+      else if (obj.id === "stone") for (let i = 0; i < 5; i++) s.api.useAt(p.tx, p.ty, "pickaxe");
+      else if (obj.id === "weed") s.api.useAt(p.tx, p.ty, "scythe");
+    };
+
+    let pos: { tx: number; ty: number } | null = null;
+    for (const p of candidates) {
+      clearIfNeeded(p);
+      if (s.api.useAt(p.tx, p.ty, "acorn")) {
+        pos = p;
+        break;
+      }
+    }
+    if (!pos) return { ok: false, step: "plant" };
+
+    // Grow to mature.
+    for (let i = 0; i < 6; i++) s.api.sleep();
+
+    const obj1 = s.api.getObject(pos.tx, pos.ty);
+    if (!obj1 || obj1.id !== "tree") return { ok: false, step: "not_tree", obj1 };
+
+    const wood0 = s.inventory.wood ?? 0;
+    for (let i = 0; i < 10; i++) s.api.useAt(pos.tx, pos.ty, "axe");
+    const obj2 = s.api.getObject(pos.tx, pos.ty);
+    const wood1 = s.inventory.wood ?? 0;
+
+    return { ok: true, wood0, wood1, obj2 };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).obj2).toBeNull();
+  expect((res as any).wood1).toBeGreaterThan((res as any).wood0);
+});

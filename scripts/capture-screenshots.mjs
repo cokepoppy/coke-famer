@@ -326,6 +326,38 @@ async function main() {
     await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(outDir, "12-scythe.png"), fullPage: true });
 
+    // 13: trees (plant acorn and grow)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+      s.api.shopBuy("acorn", 1);
+      const candidates = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+
+      const clearIfNeeded = (p) => {
+        const obj = s.api.getObject(p.tx, p.ty);
+        if (!obj) return;
+        if (obj.id === "wood") for (let i = 0; i < 5; i++) s.api.useAt(p.tx, p.ty, "axe");
+        else if (obj.id === "stone") for (let i = 0; i < 5; i++) s.api.useAt(p.tx, p.ty, "pickaxe");
+        else if (obj.id === "weed") s.api.useAt(p.tx, p.ty, "scythe");
+      };
+
+      for (const p of candidates) {
+        clearIfNeeded(p);
+        if (s.api.useAt(p.tx, p.ty, "acorn")) break;
+      }
+
+      for (let i = 0; i < 6; i++) s.api.sleep();
+      s.api.setMode("axe");
+    });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "13-tree.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

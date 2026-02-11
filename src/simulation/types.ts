@@ -29,6 +29,7 @@ export type PlacedObjectId =
   | "wood"
   | "stone"
   | "weed"
+  | "tree"
   | "fence"
   | "path"
   | "sprinkler"
@@ -61,7 +62,14 @@ export type PreservesJarState = {
   completeAtAbsMinutes: number | null;
 };
 
-export type PlacedObjectState = ChestState | ShippingBinState | ResourceState | SimplePlacedState | PreservesJarState;
+export type TreeState = {
+  id: "tree";
+  stage: 0 | 1 | 2; // 0 seed, 1 sapling, 2 mature
+  daysInStage: number;
+  hp: number;
+};
+
+export type PlacedObjectState = ChestState | ShippingBinState | ResourceState | TreeState | SimplePlacedState | PreservesJarState;
 
 export type GameSaveV0 = {
   version: 0;

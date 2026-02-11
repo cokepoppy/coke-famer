@@ -291,6 +291,7 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "-" || ev.key === "_") this.setMode("sprinkler" as any);
       if (ev.key === "=" || ev.key === "+") this.setMode("quality_sprinkler" as any);
       if (ev.key.toLowerCase() === "t") this.setMode("scythe");
+      if (ev.key.toLowerCase() === "r") this.setMode("acorn" as any);
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -686,6 +687,7 @@ export class WorldScene extends Phaser.Scene {
       wood: this.gameState?.countItem("wood" as any) ?? 0,
       stone: this.gameState?.countItem("stone" as any) ?? 0,
       fiber: this.gameState?.countItem("fiber" as any) ?? 0,
+      acorn: this.gameState?.countItem("acorn" as any) ?? 0,
       fence: this.gameState?.countItem("fence" as any) ?? 0,
       path: this.gameState?.countItem("path" as any) ?? 0,
       sprinkler: this.gameState?.countItem("sprinkler" as any) ?? 0,
@@ -945,6 +947,7 @@ export class WorldScene extends Phaser.Scene {
 
     const cropIdFromSeed = Object.values(CROPS).find((c) => c.seedItemId === this.mode)?.id ?? null;
     const isSeedMode = Boolean(cropIdFromSeed);
+    const isTreeSeedMode = this.mode === "acorn";
     const isPlaceableMode =
       this.mode === "fence" ||
       this.mode === "path" ||
@@ -955,6 +958,7 @@ export class WorldScene extends Phaser.Scene {
     if (
       this.mode === "hoe" ||
       this.mode === "watering_can" ||
+      this.mode === "acorn" ||
       this.mode === "axe" ||
       this.mode === "pickaxe" ||
       isSeedMode
@@ -972,6 +976,13 @@ export class WorldScene extends Phaser.Scene {
         return false;
       }
     }
+    if (isTreeSeedMode) {
+      if ((this.gameState.countItem("acorn" as any) ?? 0) <= 0) {
+        this.toast("No acorns", "warn");
+        if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok: false, tx, ty };
+        return false;
+      }
+    }
     if (isPlaceableMode) {
       if ((this.gameState.countItem(this.mode as any) ?? 0) <= 0) {
         this.toast("No item to place", "warn");
@@ -984,6 +995,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.mode === "hoe") ok = this.gameState.hoe(tx, ty);
     else if (this.mode === "watering_can") ok = this.gameState.water(tx, ty);
     else if (isSeedMode) ok = this.gameState.plant(tx, ty, cropIdFromSeed!);
+    else if (isTreeSeedMode) ok = this.gameState.plantTree(tx, ty);
     else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
     else if (this.mode === "fence") ok = this.gameState.placeSimpleObject(tx, ty, "fence");
     else if (this.mode === "path") ok = this.gameState.placeSimpleObject(tx, ty, "path");
@@ -1147,6 +1159,22 @@ export class WorldScene extends Phaser.Scene {
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
         this.addObjectBody(o.tx, o.ty, TILE_SIZE - 16, TILE_SIZE - 16, 8, 9);
+      } else if (o.obj.id === "tree") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const tree = o.obj as any;
+        const stage = Number(tree.stage ?? 0);
+        const w = stage <= 0 ? TILE_SIZE - 22 : stage === 1 ? TILE_SIZE - 18 : TILE_SIZE - 14;
+        const h = stage <= 0 ? TILE_SIZE - 22 : stage === 1 ? TILE_SIZE - 16 : TILE_SIZE - 6;
+        const ox = stage <= 0 ? 11 : stage === 1 ? 9 : 7;
+        const oy = stage <= 0 ? 16 : stage === 1 ? 12 : 6;
+        const color = stage <= 0 ? 0x8d6e63 : stage === 1 ? 0x4caf50 : 0x2f9e44;
+        const rect = this.add.rectangle(x + ox, y + oy, w, h, color, 0.92).setOrigin(0);
+        rect.setStrokeStyle(1, 0x1b4332, 0.7);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, w, h, ox, oy);
       } else if (o.obj.id === "preserves_jar") {
         const x = o.tx * this.map.tileWidth;
         const y = o.ty * this.map.tileHeight;
