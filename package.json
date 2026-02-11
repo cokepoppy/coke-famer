@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "sync-assets": "node scripts/sync-ga-assets.mjs",
+    "fetch-assets": "node scripts/fetch-ga-assets.mjs",
     "e2e": "npm run sync-assets && npm run build && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost playwright test",
     "preview:daemon": "node scripts/preview-daemon.mjs start",
     "preview:stop": "node scripts/preview-daemon.mjs stop",

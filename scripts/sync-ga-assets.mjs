@@ -30,7 +30,8 @@ async function main() {
   if (!checks) {
     console.error(
       `找不到 generative_agents assets 路径：${srcRoot}\n` +
-        `可通过环境变量指定：GA_ASSETS_SRC=/path/to/.../static_dirs/assets`
+        `可通过环境变量指定：GA_ASSETS_SRC=/path/to/.../static_dirs/assets\n` +
+        `或者运行：npm run fetch-assets（从 GitHub 下载后同步）`
     );
     process.exit(1);
   }
@@ -69,4 +70,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-

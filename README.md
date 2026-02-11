@@ -16,6 +16,12 @@
 npm run sync-assets
 ```
 
+如果你本机没有 `generative_agents` 仓库，也可以直接从 GitHub 拉取并同步（仍然不会提交到 git）：
+
+```bash
+npm run fetch-assets
+```
+
 2) 安装依赖并启动开发服务器
 
 ```bash
