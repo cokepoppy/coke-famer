@@ -446,7 +446,7 @@ async function main() {
         }
       }
       s.api.talkToNpc("townie");
-      s.api.giftToNpc("townie");
+      s.api.giftToNpc("townie", "wood");
     });
     await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(outDir, "18-gift.png"), fullPage: true });

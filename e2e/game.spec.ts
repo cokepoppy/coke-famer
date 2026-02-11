@@ -681,7 +681,7 @@ test("npc: gifting consumes item and changes friendship", async ({ page }) => {
     const woodReady = s.inventory.wood ?? 0;
     if (woodReady <= 0) return { ok: false, step: "no_wood" };
 
-    const gift = s.api.giftToNpc("townie");
+    const gift = s.api.giftToNpc("townie", "wood");
     const afterFriend = s.relationships?.townie?.friendship ?? 0;
     const afterWood = s.inventory.wood ?? 0;
     return { ok: true, gift, beforeFriend, afterFriend, beforeWood: woodReady, afterWood };

@@ -57,7 +57,10 @@ declare global {
         setQuest: (q: any) => void;
         completeQuest: () => { ok: boolean; reason?: string; goldGained?: number };
         talkToNpc: (npcId: string) => { ok: boolean; reason?: string; friendshipGained?: number };
-        giftToNpc: (npcId: string) => { ok: boolean; reason?: string; friendshipGained?: number; itemId?: string; taste?: string };
+        giftToNpc: (
+          npcId: string,
+          itemId?: string
+        ) => { ok: boolean; reason?: string; friendshipGained?: number; itemId?: string; taste?: string };
         closeDialogue: () => void;
         craft: (itemId: string, qty: number) => { ok: boolean; reason?: string };
         sellStack: (stack: { itemId: string; qty: number }) => { ok: boolean; goldGained?: number; reason?: string };

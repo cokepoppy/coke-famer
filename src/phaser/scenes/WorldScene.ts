@@ -508,13 +508,13 @@ export class WorldScene extends Phaser.Scene {
           this.syncWindowState();
           return res;
         },
-        giftToNpc: (npcId: string) => {
+        giftToNpc: (npcId: string, itemId?: string) => {
           if (npcId !== this.npcId) {
             const res = { ok: false, reason: "unknown_npc" };
             this.toast(`Gift failed: ${res.reason}`, "warn");
             return res;
           }
-          const res = this.gameState.giftToNpc(this.npcId);
+          const res = this.gameState.giftToNpc(this.npcId, itemId ? { itemId: itemId as any } : undefined);
           if (res.ok) {
             this.dialogue = {
               npcId: this.npcId,
@@ -527,6 +527,9 @@ export class WorldScene extends Phaser.Scene {
           } else if (res.reason === "no_gift_items") {
             this.dialogue = { npcId: this.npcId, text: "You don't have anything to gift." };
             this.toast("No gift items", "warn");
+          } else if (res.reason === "missing_item") {
+            this.dialogue = { npcId: this.npcId, text: "Looks like you don't have that item." };
+            this.toast("Missing item", "warn");
           } else {
             this.toast(`Gift failed: ${res.reason ?? "unknown"}`, "warn");
           }
@@ -1242,6 +1245,10 @@ export class WorldScene extends Phaser.Scene {
           ok = true;
           this.dialogue = { npcId: this.npcId, text: "You don't have anything to gift." };
           this.toast("No gift items", "warn");
+        } else if (res.reason === "missing_item") {
+          ok = true;
+          this.dialogue = { npcId: this.npcId, text: "Looks like you don't have that item." };
+          this.toast("Missing item", "warn");
         } else {
           this.toast(`Gift failed: ${res.reason ?? "unknown"}`, "warn");
         }

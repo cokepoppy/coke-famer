@@ -366,7 +366,12 @@ export class FarmGame {
     return this.normalizeRelationships(null);
   }
 
-  giftToNpc(npcId: NpcId): {
+  giftToNpc(
+    npcId: NpcId,
+    opts?: {
+      itemId?: ItemId;
+    }
+  ): {
     ok: boolean;
     reason?: string;
     friendshipGained?: number;
@@ -380,8 +385,14 @@ export class FarmGame {
     const current = this.normalizeRelationshipState(this.relationships[npcId]);
     if (current.lastGiftDay === this.day) return { ok: false, reason: "already_gifted", relationship: { ...current } };
 
+    const chosen = opts?.itemId ?? null;
+    if (chosen) {
+      if (!ITEMS[chosen]) return { ok: false, reason: "unknown_item", relationship: { ...current } };
+      if (this.countItem(chosen) <= 0) return { ok: false, reason: "missing_item", relationship: { ...current } };
+    }
+
     const candidates: ItemId[] = ["blueberry", "cranberry", "potato", "parsnip", "wood", "fiber", "stone"];
-    const itemId = candidates.find((id) => this.countItem(id) > 0) ?? null;
+    const itemId = chosen ?? candidates.find((id) => this.countItem(id) > 0) ?? null;
     if (!itemId) return { ok: false, reason: "no_gift_items", relationship: { ...current } };
 
     const ok = this.consumeItem(itemId, 1);

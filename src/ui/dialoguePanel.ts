@@ -27,6 +27,7 @@ export function mountDialoguePanel(host: HTMLElement): {
   host.appendChild(panel);
 
   let open = false;
+  let selectedGiftItemId: string | null = null;
   const setOpen = (next: boolean) => {
     open = next;
     panel.style.display = open ? "block" : "none";
@@ -59,9 +60,42 @@ export function mountDialoguePanel(host: HTMLElement): {
     body.appendChild(text);
 
     const actions = el("div", "dialogue-actions");
+    const sInvSlots = (s?.inventorySlots ?? []) as Array<{ itemId: string; qty: number } | null>;
+    const counts = new Map<string, number>();
+    for (const slot of sInvSlots) {
+      if (!slot) continue;
+      counts.set(slot.itemId, (counts.get(slot.itemId) ?? 0) + slot.qty);
+    }
+    const options = Array.from(counts.entries())
+      .filter(([, qty]) => qty > 0)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+
+    if (options.length) {
+      const wrap = el("div", "dialogue-gift");
+      const label = el("div", "dialogue-gift-label");
+      label.textContent = "Gift item:";
+      const select = document.createElement("select");
+      select.className = "select";
+      for (const [id, qty] of options) {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = `${id} x${qty}`;
+        select.appendChild(opt);
+      }
+      const fallback = selectedGiftItemId && counts.get(selectedGiftItemId) ? selectedGiftItemId : options[0]![0];
+      select.value = fallback;
+      selectedGiftItemId = fallback;
+      select.onchange = () => {
+        selectedGiftItemId = select.value;
+      };
+      wrap.appendChild(label);
+      wrap.appendChild(select);
+      actions.appendChild(wrap);
+    }
+
     const giftBtn = el("button", "btn");
     giftBtn.textContent = "Gift (G)";
-    giftBtn.onclick = () => window.__cokeFamer?.api?.giftToNpc?.(d.npcId);
+    giftBtn.onclick = () => window.__cokeFamer?.api?.giftToNpc?.(d.npcId, selectedGiftItemId ?? undefined);
     actions.appendChild(giftBtn);
     body.appendChild(actions);
   };
