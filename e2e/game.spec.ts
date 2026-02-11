@@ -179,3 +179,45 @@ test("chest: store items and persist across reload", async ({ page }) => {
   expect((chestSlot0 as any).itemId).toBe("parsnip_seed");
   expect((chestSlot0 as any).qty).toBeGreaterThan(0);
 });
+
+test("crafting: gather resources -> craft fence -> place fence", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const { tx, ty } = s.player;
+    const positions = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 }
+    ];
+
+    // Try gather a bit.
+    for (let i = 0; i < 3; i++) {
+      for (const p of positions) s.api.useAt(p.tx, p.ty, "axe");
+    }
+
+    const before = { fence: s.inventory.fence ?? 0, wood: s.inventory.wood ?? 0 };
+    const crafted = s.api.craft("fence", 1);
+    const after = { fence: s.inventory.fence ?? 0, wood: s.inventory.wood ?? 0 };
+
+    // Try place.
+    let placed = false;
+    for (const p of positions) {
+      if (s.api.useAt(p.tx, p.ty, "fence")) {
+        placed = true;
+        break;
+      }
+    }
+
+    return { before, crafted, after, placed };
+  });
+
+  expect(res.crafted.ok).toBeTruthy();
+  expect(res.after.fence).toBeGreaterThanOrEqual(res.before.fence);
+  expect(res.placed).toBeTruthy();
+});

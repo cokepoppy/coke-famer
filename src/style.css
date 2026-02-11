@@ -181,6 +181,46 @@ body {
   max-width: 720px;
 }
 
+.craft-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 16, 0.92);
+  max-width: 720px;
+}
+
+.craft-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.craft-title {
+  font-weight: 700;
+}
+
+.craft-body {
+  display: grid;
+  gap: 8px;
+}
+
+.craft-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.craft-left {
+  opacity: 0.95;
+}
+
 .shop-header {
   display: flex;
   align-items: center;

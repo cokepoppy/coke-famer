@@ -40,6 +40,7 @@ declare global {
           stack: { itemId: string; qty: number }
         ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
         shopBuy: (itemId: string, qty: number) => { ok: boolean; reason?: string };
+        craft: (itemId: string, qty: number) => { ok: boolean; reason?: string };
         sellStack: (stack: { itemId: string; qty: number }) => { ok: boolean; goldGained?: number; reason?: string };
         placeChestAt: (tx: number, ty: number) => boolean;
         openChestAt: (tx: number, ty: number) => boolean;

@@ -146,6 +146,56 @@ async function main() {
     await page.waitForTimeout(150);
     await page.screenshot({ path: path.join(outDir, "06-gather.png"), fullPage: true });
 
+    // 07: craft panel (after gathering some resources)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+      // Try chop/mine around player to get wood/stone.
+      const positions = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      for (let i = 0; i < 3; i++) {
+        for (const p of positions) s.api.useAt(p.tx, p.ty, "axe");
+        for (const p of positions) s.api.useAt(p.tx, p.ty, "pickaxe");
+      }
+    });
+    await page.keyboard.press("c");
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, "07-craft.png"), fullPage: true });
+
+    // 08: placeables (craft + place fence/path)
+    await reset();
+    await page.evaluate(() => {
+      const s = window.__cokeFamer;
+      const { tx, ty } = s.player;
+      const positions = [
+        { tx: tx + 1, ty },
+        { tx: tx - 1, ty },
+        { tx, ty: ty + 1 },
+        { tx, ty: ty - 1 }
+      ];
+      for (let i = 0; i < 3; i++) {
+        for (const p of positions) s.api.useAt(p.tx, p.ty, "axe");
+        for (const p of positions) s.api.useAt(p.tx, p.ty, "pickaxe");
+      }
+      s.api.craft("fence", 2);
+      s.api.craft("path", 2);
+
+      // Place around the player (skip the tile with a blocking object if any).
+      for (const p of positions) {
+        s.api.useAt(p.tx, p.ty, "path");
+      }
+      for (const p of positions) {
+        s.api.useAt(p.tx, p.ty, "fence");
+      }
+    });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(outDir, "08-placeables.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

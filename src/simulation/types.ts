@@ -23,7 +23,7 @@ export type InventorySlot = {
   qty: number;
 };
 
-export type PlacedObjectId = "chest" | "wood" | "stone";
+export type PlacedObjectId = "chest" | "wood" | "stone" | "fence" | "path";
 
 export type ChestState = {
   id: "chest";
@@ -35,7 +35,11 @@ export type ResourceState = {
   hp: number;
 };
 
-export type PlacedObjectState = ChestState | ResourceState;
+export type SimplePlacedState = {
+  id: "fence" | "path";
+};
+
+export type PlacedObjectState = ChestState | ResourceState | SimplePlacedState;
 
 export type GameSaveV0 = {
   version: 0;

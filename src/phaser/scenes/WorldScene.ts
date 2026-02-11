@@ -281,6 +281,8 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key === "5") this.setMode("chest");
       if (ev.key === "6") this.setMode("axe");
       if (ev.key === "7") this.setMode("pickaxe");
+      if (ev.key === "8") this.setMode("fence" as any);
+      if (ev.key === "9") this.setMode("path" as any);
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
@@ -369,6 +371,14 @@ export class WorldScene extends Phaser.Scene {
         shopBuy: (itemId: string, qty: number) => {
           const res = this.gameState.buy(itemId as any, qty);
           if (!res.ok) this.toast(`Buy failed: ${res.reason ?? "unknown"}`, "warn");
+          this.syncWindowState();
+          this.gameState.saveToStorage();
+          return res;
+        },
+        craft: (itemId: string, qty: number) => {
+          const res = this.gameState.craft(itemId as any, qty);
+          if (!res.ok) this.toast(`Craft failed: ${res.reason ?? "unknown"}`, "warn");
+          else this.toast("Crafted", "info");
           this.syncWindowState();
           this.gameState.saveToStorage();
           return res;
@@ -565,6 +575,8 @@ export class WorldScene extends Phaser.Scene {
       cranberry_seed: this.gameState?.countItem("cranberry_seed" as any) ?? 0,
       wood: this.gameState?.countItem("wood" as any) ?? 0,
       stone: this.gameState?.countItem("stone" as any) ?? 0,
+      fence: this.gameState?.countItem("fence" as any) ?? 0,
+      path: this.gameState?.countItem("path" as any) ?? 0,
       chest: this.gameState?.countItem("chest" as any) ?? 0
     };
     window.__cokeFamer.gold = this.gameState?.gold ?? window.__cokeFamer.gold;
@@ -625,42 +637,108 @@ export class WorldScene extends Phaser.Scene {
     this.toast("No seeds to cycle", "warn");
   }
 
-  private seedDemoResources(): void {
-    // Don't auto-seed if the player already has any non-chest objects (avoid surprising existing saves).
-    const hasNonChest = this.gameState.getAllObjects().some((o) => o.obj.id !== "chest");
-    if (hasNonChest) return;
+	  private seedDemoResources(): void {
+	    // Don't auto-seed if the player already has any non-chest objects (avoid surprising existing saves).
+	    const hasNonChest = this.gameState.getAllObjects().some((o) => o.obj.id !== "chest");
+	    if (hasNonChest) return;
 
-    const base = { tx: this.playerTile.tx, ty: this.playerTile.ty };
+	    let base = { tx: this.playerTile.tx, ty: this.playerTile.ty };
 
-    const tryPlaceNear = (kind: "wood" | "stone", preferred: Array<{ tx: number; ty: number }>) => {
-      for (const c of preferred) {
-        if (c.tx < 0 || c.ty < 0 || c.tx >= this.map.width || c.ty >= this.map.height) continue;
-        const blocked = this.collisionsLayer.getTileAt(c.tx, c.ty, true);
-        const isBlocked = Boolean(blocked?.properties?.collide);
-        if (isBlocked) continue;
-        if (c.tx === base.tx && c.ty === base.ty) continue;
-        if (this.gameState.placeResource(c.tx, c.ty, kind)) return true;
-      }
-      return false;
-    };
+	    const tryPlaceNear = (kind: "wood" | "stone", preferred: Array<{ tx: number; ty: number }>) => {
+	      for (const c of preferred) {
+	        if (c.tx < 0 || c.ty < 0 || c.tx >= this.map.width || c.ty >= this.map.height) continue;
+	        const blocked = this.collisionsLayer.getTileAt(c.tx, c.ty, true);
+	        const isBlocked = Boolean(blocked?.properties?.collide);
+	        if (isBlocked) continue;
+	        if (c.tx === base.tx && c.ty === base.ty) continue;
+	        if (this.gameState.placeResource(c.tx, c.ty, kind)) return true;
+	      }
+	      return false;
+	    };
 
-    // Place at least one of each near the player for the demo UX (deterministic screenshots + discoverability).
-    tryPlaceNear("wood", [
-      { tx: base.tx + 1, ty: base.ty },
-      { tx: base.tx, ty: base.ty + 1 },
-      { tx: base.tx - 1, ty: base.ty },
-      { tx: base.tx, ty: base.ty - 1 }
-    ]);
-    tryPlaceNear("stone", [
-      { tx: base.tx - 1, ty: base.ty },
-      { tx: base.tx, ty: base.ty - 1 },
-      { tx: base.tx + 1, ty: base.ty },
-      { tx: base.tx, ty: base.ty + 1 }
-    ]);
+	    // Place at least one of each near the player for the demo UX (deterministic screenshots + discoverability).
+	    let placedWoodNear = tryPlaceNear("wood", [
+	      { tx: base.tx + 1, ty: base.ty },
+	      { tx: base.tx, ty: base.ty + 1 },
+	      { tx: base.tx - 1, ty: base.ty },
+	      { tx: base.tx, ty: base.ty - 1 }
+	    ]);
+	    let placedStoneNear = tryPlaceNear("stone", [
+	      { tx: base.tx - 1, ty: base.ty },
+	      { tx: base.tx, ty: base.ty - 1 },
+	      { tx: base.tx + 1, ty: base.ty },
+	      { tx: base.tx, ty: base.ty + 1 }
+	    ]);
 
-    const candidates: Array<{ tx: number; ty: number }> = [];
-    const maxDist = 10;
-    for (let d = 3; d <= maxDist; d++) {
+	    // If we failed to place adjacent nodes (e.g., player spawned near blocked tiles), relocate to a nearby open tile
+	    // so the demo always has resources to interact with.
+	    if (!placedWoodNear || !placedStoneNear) {
+	      const isOpen = (tx: number, ty: number) => {
+	        if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+	        const blocked = this.collisionsLayer.getTileAt(tx, ty, true);
+	        const isBlocked = Boolean(blocked?.properties?.collide);
+	        if (isBlocked) return false;
+	        if (this.gameState.getObject(tx, ty)) return false;
+	        const t = this.gameState.getTile(tx, ty);
+	        if (t.crop || t.tilled || t.watered) return false;
+	        return true;
+	      };
+
+	      const neighborOffsets = [
+	        { dx: 1, dy: 0 },
+	        { dx: -1, dy: 0 },
+	        { dx: 0, dy: 1 },
+	        { dx: 0, dy: -1 }
+	      ];
+
+	      let found: { tx: number; ty: number } | null = null;
+	      const maxR = 12;
+	      for (let r = 1; r <= maxR && !found; r++) {
+	        for (let dx = -r; dx <= r && !found; dx++) {
+	          const dy = r - Math.abs(dx);
+	          const candidates = [
+	            { tx: base.tx + dx, ty: base.ty + dy },
+	            ...(dy !== 0 ? [{ tx: base.tx + dx, ty: base.ty - dy }] : [])
+	          ];
+	          for (const c of candidates) {
+	            if (!isOpen(c.tx, c.ty)) continue;
+	            const openNeighbors = neighborOffsets.filter((o) => isOpen(c.tx + o.dx, c.ty + o.dy)).length;
+	            if (openNeighbors >= 2) {
+	              found = c;
+	              break;
+	            }
+	          }
+	        }
+	      }
+
+	      if (found) {
+	        base = found;
+	        const px = (base.tx + 0.5) * this.map.tileWidth;
+	        const py = (base.ty + 0.5) * this.map.tileHeight;
+	        this.player.setPosition(px, py);
+	        this.playerTile = { tx: base.tx, ty: base.ty };
+	        placedWoodNear =
+	          placedWoodNear ||
+	          tryPlaceNear("wood", [
+	            { tx: base.tx + 1, ty: base.ty },
+	            { tx: base.tx, ty: base.ty + 1 },
+	            { tx: base.tx - 1, ty: base.ty },
+	            { tx: base.tx, ty: base.ty - 1 }
+	          ]);
+	        placedStoneNear =
+	          placedStoneNear ||
+	          tryPlaceNear("stone", [
+	            { tx: base.tx - 1, ty: base.ty },
+	            { tx: base.tx, ty: base.ty - 1 },
+	            { tx: base.tx + 1, ty: base.ty },
+	            { tx: base.tx, ty: base.ty + 1 }
+	          ]);
+	      }
+	    }
+
+	    const candidates: Array<{ tx: number; ty: number }> = [];
+	    const maxDist = 10;
+	    for (let d = 3; d <= maxDist; d++) {
       for (let dx = -d; dx <= d; dx++) {
         const dy = d - Math.abs(dx);
         candidates.push({ tx: base.tx + dx, ty: base.ty + dy });
@@ -699,6 +777,7 @@ export class WorldScene extends Phaser.Scene {
 
     const cropIdFromSeed = Object.values(CROPS).find((c) => c.seedItemId === this.mode)?.id ?? null;
     const isSeedMode = Boolean(cropIdFromSeed);
+    const isPlaceableMode = this.mode === "fence" || this.mode === "path";
 
     if (
       this.mode === "hoe" ||
@@ -720,12 +799,21 @@ export class WorldScene extends Phaser.Scene {
         return false;
       }
     }
+    if (isPlaceableMode) {
+      if ((this.gameState.countItem(this.mode as any) ?? 0) <= 0) {
+        this.toast("No item to place", "warn");
+        if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok: false, tx, ty };
+        return false;
+      }
+    }
 
     let ok = false;
     if (this.mode === "hoe") ok = this.gameState.hoe(tx, ty);
     else if (this.mode === "watering_can") ok = this.gameState.water(tx, ty);
     else if (isSeedMode) ok = this.gameState.plant(tx, ty, cropIdFromSeed!);
     else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
+    else if (this.mode === "fence") ok = this.gameState.placeSimpleObject(tx, ty, "fence");
+    else if (this.mode === "path") ok = this.gameState.placeSimpleObject(tx, ty, "path");
     else if ((this.mode as ToolId) === "axe") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
@@ -741,10 +829,21 @@ export class WorldScene extends Phaser.Scene {
         } else {
           this.toast("Not a chest", "warn");
         }
+      } else if (obj?.id === "fence") {
+        ok = this.gameState.pickupSimpleObject(tx, ty, "fence");
+        if (ok) this.toast("Picked up fence", "info");
       } else {
         ok = this.gameState.chop(tx, ty);
       }
-    } else if ((this.mode as ToolId) === "pickaxe") ok = this.gameState.mine(tx, ty);
+    } else if ((this.mode as ToolId) === "pickaxe") {
+      const obj = this.gameState.getObject(tx, ty);
+      if (obj?.id === "path") {
+        ok = this.gameState.pickupSimpleObject(tx, ty, "path");
+        if (ok) this.toast("Picked up path", "info");
+      } else {
+        ok = this.gameState.mine(tx, ty);
+      }
+    }
     else if ((this.mode as ToolId) === "hand") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
@@ -798,6 +897,23 @@ export class WorldScene extends Phaser.Scene {
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
         this.addObjectBody(o.tx, o.ty, TILE_SIZE - 12, TILE_SIZE - 12, 0, 0);
+      } else if (o.obj.id === "fence") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 2, y + 18, TILE_SIZE - 4, TILE_SIZE - 20, 0xa87c4f, 0.95).setOrigin(0);
+        rect.setStrokeStyle(1, 0x3b2a18, 0.75);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 6, TILE_SIZE - 12, 3, 18);
+      } else if (o.obj.id === "path") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 2, y + 22, TILE_SIZE - 4, TILE_SIZE - 24, 0x585f66, 0.85).setOrigin(0);
+        rect.setStrokeStyle(1, 0x2b2f33, 0.55);
+        rect.setDepth(ENTITY_DEPTH_BASE + y);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
       }
     }
   }

@@ -1,5 +1,6 @@
 import { CROPS, type CropId } from "../content/crops";
 import { ITEMS, type ItemId } from "../content/items";
+import { RECIPES } from "../content/recipes";
 import { calendarFromDay, weatherForDay } from "./calendar";
 import type {
   GameSaveV0,
@@ -232,6 +233,29 @@ export class FarmGame {
     return true;
   }
 
+  placeSimpleObject(tx: number, ty: number, id: "fence" | "path"): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop || t.tilled || t.watered) return false;
+    if (!this.consumeItem(id, 1)) return false;
+    this.objects.set(key, { id });
+    return true;
+  }
+
+  pickupSimpleObject(tx: number, ty: number, id: "fence" | "path"): boolean {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== id) return false;
+    this.objects.delete(key);
+    const added = this.addItem(id, 1);
+    if (!added) {
+      this.objects.set(key, obj);
+      return false;
+    }
+    return true;
+  }
+
   removeChest(tx: number, ty: number): boolean {
     const key = tileKey(tx, ty);
     const obj = this.objects.get(key);
@@ -427,6 +451,32 @@ export class FarmGame {
     const added = this.addItem(itemId, qty);
     if (!added) return { ok: false, reason: "inv_full" };
     this.gold -= cost;
+    return { ok: true };
+  }
+
+  craft(output: ItemId, qty: number): { ok: boolean; reason?: string } {
+    if (qty <= 0) return { ok: false, reason: "qty" };
+    const recipe = RECIPES.find((r) => r.output === output);
+    if (!recipe) return { ok: false, reason: "no_recipe" };
+
+    const outQty = recipe.qty * qty;
+    if (!this.canAddItem(output, outQty)) return { ok: false, reason: "inv_full" };
+
+    for (const [itemId, needEach] of Object.entries(recipe.ingredients)) {
+      const need = (needEach ?? 0) * qty;
+      if (need <= 0) continue;
+      if (this.countItem(itemId as ItemId) < need) return { ok: false, reason: "missing" };
+    }
+
+    for (const [itemId, needEach] of Object.entries(recipe.ingredients)) {
+      const need = (needEach ?? 0) * qty;
+      if (need <= 0) continue;
+      const ok = this.consumeItem(itemId as ItemId, need);
+      if (!ok) return { ok: false, reason: "missing" };
+    }
+
+    const added = this.addItem(output, outQty);
+    if (!added) return { ok: false, reason: "inv_full" };
     return { ok: true };
   }
 
