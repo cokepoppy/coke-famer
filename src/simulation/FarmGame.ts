@@ -16,7 +16,11 @@ import type {
   TileState
 } from "./types";
 
-const SAVE_KEY = "coke-famer-save";
+function saveKey(slot: number): string {
+  const s = Math.max(1, Math.floor(slot));
+  if (s === 1) return "coke-famer-save";
+  return `coke-famer-save:slot${s}`;
+}
 const CURRENT_SAVE_VERSION = 5 as const;
 
 const DAY_START_MINUTES = 6 * 60;
@@ -93,8 +97,8 @@ export class FarmGame {
     return g;
   }
 
-  static loadFromStorage(): FarmGame | null {
-    const raw = localStorage.getItem(SAVE_KEY);
+  static loadFromStorage(slot = 1): FarmGame | null {
+    const raw = localStorage.getItem(saveKey(slot));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3 | GameSaveV4 | GameSaveV5;
     if (!parsed) return null;
@@ -110,7 +114,7 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
-      g.saveToStorage();
+      g.saveToStorage(slot);
       return g;
     }
     if (parsed.version === 1) {
@@ -123,7 +127,7 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
-      g.saveToStorage();
+      g.saveToStorage(slot);
       return g;
     }
     if (parsed.version === 2) {
@@ -136,7 +140,7 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
-      g.saveToStorage();
+      g.saveToStorage(slot);
       return g;
     }
     if (parsed.version === 3) {
@@ -149,7 +153,7 @@ export class FarmGame {
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
       g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
-      g.saveToStorage();
+      g.saveToStorage(slot);
       return g;
     }
     if (parsed.version === 4) {
@@ -163,7 +167,7 @@ export class FarmGame {
       for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
       g.quest = g.generateQuestForDay(g.day);
       // Migrate-on-load
-      g.saveToStorage();
+      g.saveToStorage(slot);
       return g;
     }
     if (parsed.version === 5) {
@@ -181,7 +185,7 @@ export class FarmGame {
     return null;
   }
 
-  saveToStorage(): void {
+  saveToStorage(slot = 1): void {
     const tiles: GameSaveV0["tiles"] = [];
     for (const [k, state] of this.tiles.entries()) {
       const [txStr, tyStr] = k.split(",");
@@ -204,7 +208,7 @@ export class FarmGame {
       objects,
       quest: this.quest
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    localStorage.setItem(saveKey(slot), JSON.stringify(save));
   }
 
   resetToNewGame(): void {
@@ -217,7 +221,21 @@ export class FarmGame {
     this.tiles = new Map();
     this.objects = new Map();
     this.quest = fresh.quest;
-    this.saveToStorage();
+  }
+
+  static exportSaveJson(slot = 1): string | null {
+    return localStorage.getItem(saveKey(slot));
+  }
+
+  static importSaveJson(slot: number, json: string): { ok: boolean; reason?: string } {
+    if (!json || typeof json !== "string") return { ok: false, reason: "json" };
+    try {
+      JSON.parse(json);
+    } catch {
+      return { ok: false, reason: "parse" };
+    }
+    localStorage.setItem(saveKey(slot), json);
+    return { ok: true };
   }
 
   getTile(tx: number, ty: number): TileState {

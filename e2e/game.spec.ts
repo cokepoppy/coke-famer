@@ -582,3 +582,35 @@ test("quest: deliver items for gold reward", async ({ page }) => {
   expect((res as any).gold1).toBeGreaterThan((res as any).gold0);
   expect((res as any).q2.completed).toBeTruthy();
 });
+
+test("save slots: switching keeps saves isolated", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+
+  const res = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const chestPos = { tx: 0, ty: 0 };
+
+    s.api.setSaveSlot(1);
+    s.api.reset();
+    s.api.shopBuy("chest", 1);
+    const placed = s.api.placeChestAt(chestPos.tx, chestPos.ty);
+    if (!placed) return { ok: false, step: "place_slot1" };
+    s.api.save();
+
+    // Slot 2 should not have the chest at (0,0).
+    s.api.setSaveSlot(2);
+    const obj2 = s.api.getObject(chestPos.tx, chestPos.ty);
+
+    // Back to slot 1: chest should be there.
+    s.api.setSaveSlot(1);
+    const obj1 = s.api.getObject(chestPos.tx, chestPos.ty);
+
+    return { ok: true, obj2, obj1 };
+  });
+
+  expect(res.ok).toBeTruthy();
+  expect((res as any).obj2).toBeNull();
+  expect((res as any).obj1?.id).toBe("chest");
+});

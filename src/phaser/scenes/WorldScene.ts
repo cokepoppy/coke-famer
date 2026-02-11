@@ -50,6 +50,7 @@ export class WorldScene extends Phaser.Scene {
   private objectBodies!: Phaser.GameObjects.Group;
   private selectedSeed: ItemId = "parsnip_seed";
   private isFreshGame = false;
+  private saveSlot = 1;
 
   preload(): void {
     this.load.tilemapTiledJSON(
@@ -256,7 +257,11 @@ export class WorldScene extends Phaser.Scene {
     this.reticle = this.add.graphics();
     this.reticle.setDepth(overheadDepth + 100);
 
-    const loaded = FarmGame.loadFromStorage();
+    const slotRaw = localStorage.getItem("coke-famer-save-slot");
+    const slotParsed = Math.max(1, Math.floor(Number(slotRaw ?? "1")));
+    this.saveSlot = Number.isFinite(slotParsed) ? slotParsed : 1;
+
+    const loaded = FarmGame.loadFromStorage(this.saveSlot);
     this.isFreshGame = !loaded;
     this.gameState = loaded ?? FarmGame.newGame();
 
@@ -304,7 +309,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.isFreshGame) this.seedDemoResources();
     this.ensureShippingBin();
     this.gameState.refreshDerivedState();
-    this.gameState.saveToStorage();
+    this.gameState.saveToStorage(this.saveSlot);
     this.redrawAllObjects();
 
     window.__cokeFamer = {
@@ -331,11 +336,11 @@ export class WorldScene extends Phaser.Scene {
           return res;
         },
         save: () => {
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
         },
         load: () => {
-          const loaded = FarmGame.loadFromStorage();
+          const loaded = FarmGame.loadFromStorage(this.saveSlot);
           if (loaded) this.gameState = loaded;
           this.activeChest = null;
           this.activeContainer = null;
@@ -354,8 +359,45 @@ export class WorldScene extends Phaser.Scene {
           this.ensureShippingBin();
           this.gameState.refreshDerivedState();
           this.redrawAllObjects();
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
+        },
+        getSaveSlot: () => this.saveSlot,
+        setSaveSlot: (slot: number) => {
+          const next = Math.max(1, Math.min(3, Math.floor(Number(slot))));
+          if (!Number.isFinite(next)) return { ok: false, reason: "slot" };
+          this.saveSlot = next;
+          localStorage.setItem("coke-famer-save-slot", String(next));
+
+          const loaded = FarmGame.loadFromStorage(this.saveSlot);
+          this.isFreshGame = !loaded;
+          this.gameState = loaded ?? FarmGame.newGame();
+          this.activeChest = null;
+          this.activeContainer = null;
+          this.ensureShippingBin();
+          this.gameState.refreshDerivedState();
+          this.redrawAllFarmTiles();
+          this.redrawAllObjects();
+          this.gameState.saveToStorage(this.saveSlot);
+          this.syncWindowState();
+          return { ok: true };
+        },
+        exportSave: () => {
+          return FarmGame.exportSaveJson(this.saveSlot);
+        },
+        importSave: (json: string) => {
+          const res = FarmGame.importSaveJson(this.saveSlot, json);
+          if (!res.ok) return res;
+          const loaded = FarmGame.loadFromStorage(this.saveSlot);
+          if (loaded) this.gameState = loaded;
+          this.activeChest = null;
+          this.activeContainer = null;
+          this.ensureShippingBin();
+          this.gameState.refreshDerivedState();
+          this.redrawAllFarmTiles();
+          this.redrawAllObjects();
+          this.syncWindowState();
+          return { ok: true };
         },
         setDay: (day: number) => {
           const next = Math.max(1, Math.floor(Number(day)));
@@ -365,7 +407,7 @@ export class WorldScene extends Phaser.Scene {
           this.gameState.refreshDerivedState();
           this.redrawAllFarmTiles();
           this.redrawAllObjects();
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
         },
         useAt: (tx: number, ty: number, mode?: string) => {
@@ -385,7 +427,7 @@ export class WorldScene extends Phaser.Scene {
           const ok = this.gameState.placeWeed(tx, ty);
           if (ok) {
             this.redrawAllObjects();
-            this.gameState.saveToStorage();
+            this.gameState.saveToStorage(this.saveSlot);
           }
           this.syncWindowState();
           return ok;
@@ -420,7 +462,7 @@ export class WorldScene extends Phaser.Scene {
           const res = this.gameState.buy(itemId as any, qty);
           if (!res.ok) this.toast(`Buy failed: ${res.reason ?? "unknown"}`, "warn");
           this.syncWindowState();
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           return res;
         },
         getQuest: () => {
@@ -428,14 +470,14 @@ export class WorldScene extends Phaser.Scene {
         },
         setQuest: (q: any) => {
           this.gameState.debugSetQuest(q);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
         },
         completeQuest: () => {
           const res = this.gameState.completeQuest();
           if (res.ok) this.toast(`Quest complete +${res.goldGained ?? 0}g`, "info");
           else this.toast(`Quest failed: ${res.reason ?? "unknown"}`, "warn");
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return res;
         },
@@ -444,7 +486,7 @@ export class WorldScene extends Phaser.Scene {
           if (!res.ok) this.toast(`Craft failed: ${res.reason ?? "unknown"}`, "warn");
           else this.toast("Crafted", "info");
           this.syncWindowState();
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           return res;
         },
         sellStack: (stack: { itemId: string; qty: number }) => {
@@ -452,7 +494,7 @@ export class WorldScene extends Phaser.Scene {
           if (res.ok) this.toast(`Sold +${res.goldGained}g`, "info");
           else this.toast(`Sell failed: ${res.reason ?? "unknown"}`, "warn");
           this.syncWindowState();
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           return res;
         },
         placeChestAt: (tx: number, ty: number) => {
@@ -460,7 +502,7 @@ export class WorldScene extends Phaser.Scene {
           if (ok) {
             this.toast("Placed chest", "info");
             this.redrawAllObjects();
-            this.gameState.saveToStorage();
+            this.gameState.saveToStorage(this.saveSlot);
           } else {
             this.toast("Place chest failed", "warn");
           }
@@ -484,28 +526,28 @@ export class WorldScene extends Phaser.Scene {
         chestPickup: (index: number) => {
           if (!this.activeChest) return null;
           const picked = this.gameState.chestPickup(this.activeChest.tx, this.activeChest.ty, index);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
         },
         chestSplitHalf: (index: number) => {
           if (!this.activeChest) return null;
           const picked = this.gameState.chestSplitHalf(this.activeChest.tx, this.activeChest.ty, index);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
         },
         chestPlace: (index: number, stack: { itemId: string; qty: number }) => {
           if (!this.activeChest) return stack as any;
           const rem = this.gameState.chestPlace(this.activeChest.tx, this.activeChest.ty, index, stack as any);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
         },
         chestPlaceOne: (index: number, stack: { itemId: string; qty: number }) => {
           if (!this.activeChest) return { ok: false, remaining: stack as any };
           const res = this.gameState.chestPlaceOne(this.activeChest.tx, this.activeChest.ty, index, stack as any);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return {
             ok: res.ok,
@@ -516,12 +558,12 @@ export class WorldScene extends Phaser.Scene {
           if (!this.activeContainer) return null;
           if (this.activeContainer.kind === "chest") {
             const picked = this.gameState.chestPickup(this.activeContainer.tx, this.activeContainer.ty, index);
-            this.gameState.saveToStorage();
+            this.gameState.saveToStorage(this.saveSlot);
             this.syncWindowState();
             return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
           }
           const picked = this.gameState.shippingPickup(index);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
         },
@@ -529,12 +571,12 @@ export class WorldScene extends Phaser.Scene {
           if (!this.activeContainer) return null;
           if (this.activeContainer.kind === "chest") {
             const picked = this.gameState.chestSplitHalf(this.activeContainer.tx, this.activeContainer.ty, index);
-            this.gameState.saveToStorage();
+            this.gameState.saveToStorage(this.saveSlot);
             this.syncWindowState();
             return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
           }
           const picked = this.gameState.shippingSplitHalf(index);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
         },
@@ -542,12 +584,12 @@ export class WorldScene extends Phaser.Scene {
           if (!this.activeContainer) return stack as any;
           if (this.activeContainer.kind === "chest") {
             const rem = this.gameState.chestPlace(this.activeContainer.tx, this.activeContainer.ty, index, stack as any);
-            this.gameState.saveToStorage();
+            this.gameState.saveToStorage(this.saveSlot);
             this.syncWindowState();
             return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
           }
           const rem = this.gameState.shippingPlace(index, stack as any);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
         },
@@ -555,7 +597,7 @@ export class WorldScene extends Phaser.Scene {
           if (!this.activeContainer) return { ok: false, remaining: stack as any };
           if (this.activeContainer.kind === "chest") {
             const res = this.gameState.chestPlaceOne(this.activeContainer.tx, this.activeContainer.ty, index, stack as any);
-            this.gameState.saveToStorage();
+            this.gameState.saveToStorage(this.saveSlot);
             this.syncWindowState();
             return {
               ok: res.ok,
@@ -563,7 +605,7 @@ export class WorldScene extends Phaser.Scene {
             };
           }
           const res = this.gameState.shippingPlaceOne(index, stack as any);
-          this.gameState.saveToStorage();
+          this.gameState.saveToStorage(this.saveSlot);
           this.syncWindowState();
           return {
             ok: res.ok,
@@ -701,6 +743,7 @@ export class WorldScene extends Phaser.Scene {
     window.__cokeFamer.energy = this.gameState?.energy ?? window.__cokeFamer.energy;
     window.__cokeFamer.energyMax = GAME_CONSTANTS.ENERGY_MAX;
     window.__cokeFamer.mode = this.mode;
+    window.__cokeFamer.saveSlot = this.saveSlot;
     window.__cokeFamer.inventory = {
       parsnip_seed: this.gameState?.countItem("parsnip_seed") ?? 0,
       parsnip: this.gameState?.countItem("parsnip") ?? 0,

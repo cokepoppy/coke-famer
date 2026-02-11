@@ -11,6 +11,7 @@ declare global {
       energy?: number;
       energyMax?: number;
       mode: string;
+      saveSlot?: number;
       inventory: Record<string, number>;
       inventorySlots?: Array<{ itemId: string; qty: number } | null>;
       gold?: number;
@@ -31,6 +32,10 @@ declare global {
         save: () => void;
         load: () => void;
         reset: () => void;
+        getSaveSlot: () => number;
+        setSaveSlot: (slot: number) => { ok: boolean; reason?: string };
+        exportSave: () => string | null;
+        importSave: (json: string) => { ok: boolean; reason?: string };
         setDay: (day: number) => void;
         useAt: (tx: number, ty: number, mode?: string) => boolean;
         setMode: (mode: string) => void;

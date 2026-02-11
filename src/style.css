@@ -133,6 +133,38 @@ body {
   gap: 8px;
 }
 
+.save-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 16, 0.92);
+  max-width: 720px;
+}
+
+.save-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.save-title {
+  font-weight: 700;
+}
+
+.save-text {
+  opacity: 0.95;
+  margin-bottom: 10px;
+}
+
+.save-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
 .inv-header {
   display: flex;
   align-items: center;

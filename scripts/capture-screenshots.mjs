@@ -413,6 +413,12 @@ async function main() {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(outDir, "15-quest.png"), fullPage: true });
 
+    // 16: save slots panel
+    await reset();
+    await page.keyboard.press("m");
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(outDir, "16-save-slots.png"), fullPage: true });
+
     await browser.close();
   } finally {
     server.kill("SIGTERM");

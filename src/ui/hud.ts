@@ -2,6 +2,7 @@ import { mountInventoryPanel } from "./inventoryPanel";
 import { mountShopPanel } from "./shopPanel";
 import { mountCraftPanel } from "./craftPanel";
 import { mountQuestPanel } from "./questPanel";
+import { mountSaveSlotsPanel } from "./saveSlotsPanel";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string) {
   const node = document.createElement(tag);
@@ -66,7 +67,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "0-9,-,=,T,R: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | P: Pause";
+  subHint.textContent = "0-9,-,=,T,R: Mode | Q: Seeds | I: Inv | O: Shop | C: Craft | J: Quest | M: Saves | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -124,6 +125,10 @@ export function mountHud(containerId: string): void {
   const questHost = el("div");
   host.appendChild(questHost);
   const { setOpen: setQuestOpen, isOpen: isQuestOpen, render: renderQuest } = mountQuestPanel(questHost);
+
+  const saveHost = el("div");
+  host.appendChild(saveHost);
+  const { setOpen: setSaveOpen, isOpen: isSaveOpen, render: renderSave } = mountSaveSlotsPanel(saveHost);
 
   let invPausedByUi = false;
   const openInventory = () => {
@@ -210,17 +215,40 @@ export function mountHud(containerId: string): void {
     else openQuest();
   };
 
+  let savePausedByUi = false;
+  const openSave = () => {
+    setSaveOpen(true);
+    const paused = Boolean(window.__cokeFamer?.timePaused);
+    if (!paused) {
+      savePausedByUi = true;
+      window.__cokeFamer?.api?.setPaused(true);
+    }
+  };
+  const closeSave = () => {
+    setSaveOpen(false);
+    if (savePausedByUi) {
+      savePausedByUi = false;
+      window.__cokeFamer?.api?.setPaused(false);
+    }
+  };
+  const toggleSave = () => {
+    if (isSaveOpen()) closeSave();
+    else openSave();
+  };
+
   window.addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "i") toggleInventory();
     if (e.key.toLowerCase() === "o") toggleShop();
     if (e.key.toLowerCase() === "c") toggleCraft();
     if (e.key.toLowerCase() === "j") toggleQuest();
+    if (e.key.toLowerCase() === "m") toggleSave();
   });
 
   invHost.addEventListener("inventory:close", () => closeInventory());
   shopHost.addEventListener("shop:close", () => closeShop());
   craftHost.addEventListener("craft:close", () => closeCraft());
   questHost.addEventListener("quest:close", () => closeQuest());
+  saveHost.addEventListener("save:close", () => closeSave());
 
   const renderHotbar = (mode: string, inventory: Record<string, number>, selectedSeed?: string) => {
     const seedId = selectedSeed ?? "parsnip_seed";
@@ -274,6 +302,7 @@ export function mountHud(containerId: string): void {
       hudGold.textContent = String(s.gold ?? 0);
       renderHotbar(s.mode, s.inventory, s.selectedSeed);
       if (isQuestOpen()) renderQuest();
+      if (isSaveOpen()) renderSave();
 
       btnPause.textContent = s.timePaused ? "Resume" : "Pause";
 
@@ -291,6 +320,7 @@ export function mountHud(containerId: string): void {
       if (isShopOpen()) renderShop();
       if (isCraftOpen()) renderCraft();
       if (isQuestOpen()) renderQuest();
+      if (isSaveOpen()) renderSave();
     }
     requestAnimationFrame(render);
   };
