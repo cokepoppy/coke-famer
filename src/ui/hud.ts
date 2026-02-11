@@ -40,8 +40,9 @@ export function mountHud(containerId: string): void {
     `Mode: <span id="hud-mode">?</span> | ` +
     `Tile: <span id="hud-tile">?</span>`;
   invLine.innerHTML =
-    `Seeds: <span id="hud-seeds">0</span> | ` +
-    `Parsnip: <span id="hud-parsnip">0</span>`;
+    `Seed: <span id="hud-seed">?</span> x<span id="hud-seedqty">0</span> | ` +
+    `Parsnip: <span id="hud-parsnip">0</span> | ` +
+    `Chest: <span id="hud-chest">0</span>`;
 
   right.appendChild(button("Sleep", "btn-sleep"));
   right.appendChild(button("Pause", "btn-pause"));
@@ -58,7 +59,7 @@ export function mountHud(containerId: string): void {
   host.appendChild(hotbar);
 
   const subHint = el("div", "subhint");
-  subHint.textContent = "I: Inventory | O: Shop | P: Pause";
+  subHint.textContent = "1-5: Mode | Q: Cycle Seeds | I: Inventory | O: Shop | P: Pause";
   host.appendChild(subHint);
 
   const btnSleep = document.getElementById("btn-sleep") as HTMLButtonElement;
@@ -85,8 +86,10 @@ export function mountHud(containerId: string): void {
   const hudGold = document.getElementById("hud-gold")!;
   const hudMode = document.getElementById("hud-mode")!;
   const hudTile = document.getElementById("hud-tile")!;
-  const hudSeeds = document.getElementById("hud-seeds")!;
+  const hudSeed = document.getElementById("hud-seed")!;
+  const hudSeedQty = document.getElementById("hud-seedqty")!;
   const hudParsnip = document.getElementById("hud-parsnip")!;
+  const hudChest = document.getElementById("hud-chest")!;
 
   const hudHotbar = document.getElementById("hud-hotbar")!;
 
@@ -113,6 +116,7 @@ export function mountHud(containerId: string): void {
   };
   const closeInventory = () => {
     setInvOpen(false);
+    window.__cokeFamer?.api?.closeChest();
     if (invPausedByUi) {
       invPausedByUi = false;
       window.__cokeFamer?.api?.setPaused(false);
@@ -152,12 +156,15 @@ export function mountHud(containerId: string): void {
   invHost.addEventListener("inventory:close", () => closeInventory());
   shopHost.addEventListener("shop:close", () => closeShop());
 
-  const renderHotbar = (mode: string, inventory: Record<string, number>) => {
+  const renderHotbar = (mode: string, inventory: Record<string, number>, selectedSeed?: string) => {
+    const seedId = selectedSeed ?? "parsnip_seed";
+    const seedQty = inventory[seedId] ?? 0;
     const entries: Array<{ key: string; label: string }> = [
       { key: "hoe", label: "1 Hoe" },
       { key: "watering_can", label: "2 Water" },
-      { key: "parsnip_seed", label: `3 Seed (${inventory.parsnip_seed ?? 0})` },
-      { key: "hand", label: "4 Hand" }
+      { key: seedId, label: `3 Seed: ${seedId} (${seedQty})` },
+      { key: "hand", label: "4 Hand" },
+      { key: "chest", label: `5 Chest (${inventory.chest ?? 0})` }
     ];
     hudHotbar.innerHTML = "";
     for (const e of entries) {
@@ -177,12 +184,15 @@ export function mountHud(containerId: string): void {
       hudWeather.textContent = s.weather ?? "?";
       hudMode.textContent = s.mode;
       hudTile.textContent = `${s.player.tx},${s.player.ty}`;
-      hudSeeds.textContent = String(s.inventory.parsnip_seed ?? 0);
+      const sel = s.selectedSeed ?? "parsnip_seed";
+      hudSeed.textContent = sel;
+      hudSeedQty.textContent = String(s.inventory[sel] ?? 0);
       hudParsnip.textContent = String(s.inventory.parsnip ?? 0);
+      hudChest.textContent = String(s.inventory.chest ?? 0);
       hudTime.textContent = s.timeText ?? "?";
       hudEnergy.textContent = `${s.energy ?? "?"}/${s.energyMax ?? "?"}`;
       hudGold.textContent = String(s.gold ?? 0);
-      renderHotbar(s.mode, s.inventory);
+      renderHotbar(s.mode, s.inventory, s.selectedSeed);
 
       btnPause.textContent = s.timePaused ? "Resume" : "Pause";
 

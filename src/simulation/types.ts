@@ -23,6 +23,15 @@ export type InventorySlot = {
   qty: number;
 };
 
+export type PlacedObjectId = "chest";
+
+export type ChestState = {
+  id: "chest";
+  slots: Array<InventorySlot | null>;
+};
+
+export type PlacedObjectState = ChestState;
+
 export type GameSaveV0 = {
   version: 0;
   day: number;
@@ -57,4 +66,15 @@ export type GameSaveV3 = {
   gold: number;
   inventorySlots: Array<InventorySlot | null>;
   tiles: Array<{ tx: number; ty: number; state: TileState }>;
+};
+
+export type GameSaveV4 = {
+  version: 4;
+  day: number;
+  minutes: number;
+  energy: number;
+  gold: number;
+  inventorySlots: Array<InventorySlot | null>;
+  tiles: Array<{ tx: number; ty: number; state: TileState }>;
+  objects: Array<{ tx: number; ty: number; obj: PlacedObjectState }>;
 };

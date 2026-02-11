@@ -62,12 +62,15 @@ export function mountShopPanel(host: HTMLElement): {
       body.appendChild(buyRow("Parsnip Seeds (20g)", "parsnip_seed", 5));
       body.appendChild(buyRow("Potato Seeds (50g)", "potato_seed", 1));
       body.appendChild(buyRow("Potato Seeds (50g)", "potato_seed", 5));
+      body.appendChild(buyRow("Chest (200g)", "chest", 1));
     } else if (season === "summer") {
       body.appendChild(buyRow("Blueberry Seeds (80g)", "blueberry_seed", 1));
       body.appendChild(buyRow("Blueberry Seeds (80g)", "blueberry_seed", 5));
+      body.appendChild(buyRow("Chest (200g)", "chest", 1));
     } else if (season === "fall") {
       body.appendChild(buyRow("Cranberry Seeds (100g)", "cranberry_seed", 1));
       body.appendChild(buyRow("Cranberry Seeds (100g)", "cranberry_seed", 5));
+      body.appendChild(buyRow("Chest (200g)", "chest", 1));
     } else {
       const msg = el("div");
       msg.textContent = "Shop is closed this season (demo).";

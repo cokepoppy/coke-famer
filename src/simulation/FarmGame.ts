@@ -6,19 +6,22 @@ import type {
   GameSaveV1,
   GameSaveV2,
   GameSaveV3,
+  GameSaveV4,
   InventorySlot,
   TileKey,
+  PlacedObjectState,
   TileState
 } from "./types";
 
 const SAVE_KEY = "coke-famer-save";
-const CURRENT_SAVE_VERSION = 3 as const;
+const CURRENT_SAVE_VERSION = 4 as const;
 
 const DAY_START_MINUTES = 6 * 60;
 const DAY_END_MINUTES = 26 * 60; // 2:00 next day (allow wrap handling in UI)
 const ENERGY_MAX = 270;
 const INVENTORY_SIZE = 24;
 const START_GOLD = 500;
+const CHEST_SIZE = 24;
 
 const ACTION_MINUTES = {
   hoe: 10,
@@ -53,6 +56,7 @@ export class FarmGame {
   gold = START_GOLD;
   inventorySlots: Array<InventorySlot | null> = Array.from({ length: INVENTORY_SIZE }, () => null);
   private tiles = new Map<TileKey, TileState>();
+  private objects = new Map<TileKey, PlacedObjectState>();
 
   static newGame(): FarmGame {
     const g = new FarmGame();
@@ -68,7 +72,7 @@ export class FarmGame {
   static loadFromStorage(): FarmGame | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3;
+    const parsed = JSON.parse(raw) as GameSaveV0 | GameSaveV1 | GameSaveV2 | GameSaveV3 | GameSaveV4;
     if (!parsed) return null;
 
     const g = new FarmGame();
@@ -92,7 +96,7 @@ export class FarmGame {
       g.inventorySlots = Array.from({ length: INVENTORY_SIZE }, () => null);
       for (const it of parsed.inventory ?? []) g.addItem(it.itemId, it.qty);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
-      // Migrate-on-load to V2
+      // Migrate-on-load
       g.saveToStorage();
       return g;
     }
@@ -104,7 +108,7 @@ export class FarmGame {
       g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
-      // Migrate-on-load to V3 if needed.
+      // Migrate-on-load
       g.saveToStorage();
       return g;
     }
@@ -116,6 +120,19 @@ export class FarmGame {
       g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
       while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
       for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      // Migrate-on-load
+      g.saveToStorage();
+      return g;
+    }
+    if (parsed.version === 4) {
+      g.day = parsed.day;
+      g.minutes = parsed.minutes ?? DAY_START_MINUTES;
+      g.energy = parsed.energy ?? ENERGY_MAX;
+      g.gold = parsed.gold ?? START_GOLD;
+      g.inventorySlots = (parsed.inventorySlots ?? []).slice(0, INVENTORY_SIZE);
+      while (g.inventorySlots.length < INVENTORY_SIZE) g.inventorySlots.push(null);
+      for (const t of parsed.tiles ?? []) g.tiles.set(tileKey(t.tx, t.ty), t.state);
+      for (const o of parsed.objects ?? []) g.objects.set(tileKey(o.tx, o.ty), o.obj);
       return g;
     }
     return null;
@@ -127,14 +144,21 @@ export class FarmGame {
       const [txStr, tyStr] = k.split(",");
       tiles.push({ tx: Number(txStr), ty: Number(tyStr), state });
     }
-    const save: GameSaveV3 = {
+    const objects: GameSaveV4["objects"] = [];
+    for (const [k, obj] of this.objects.entries()) {
+      const [txStr, tyStr] = k.split(",");
+      objects.push({ tx: Number(txStr), ty: Number(tyStr), obj });
+    }
+
+    const save: GameSaveV4 = {
       version: CURRENT_SAVE_VERSION,
       day: this.day,
       minutes: this.minutes,
       energy: this.energy,
       inventorySlots: this.inventorySlots,
       gold: this.gold,
-      tiles
+      tiles,
+      objects
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
   }
@@ -147,6 +171,7 @@ export class FarmGame {
     this.gold = fresh.gold;
     this.inventorySlots = fresh.inventorySlots;
     this.tiles = new Map();
+    this.objects = new Map();
     this.saveToStorage();
   }
 
@@ -166,6 +191,50 @@ export class FarmGame {
     return out;
   }
 
+  getObject(tx: number, ty: number): PlacedObjectState | null {
+    return this.objects.get(tileKey(tx, ty)) ?? null;
+  }
+
+  getAllObjects(): Array<{ tx: number; ty: number; obj: PlacedObjectState }> {
+    const out: Array<{ tx: number; ty: number; obj: PlacedObjectState }> = [];
+    for (const [k, obj] of this.objects.entries()) {
+      const [txStr, tyStr] = k.split(",");
+      out.push({ tx: Number(txStr), ty: Number(tyStr), obj });
+    }
+    return out;
+  }
+
+  placeChest(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    if (this.objects.has(key)) return false;
+    const t = this.getTile(tx, ty);
+    if (t.crop) return false;
+    if (!this.consumeItem("chest", 1)) return false;
+    this.objects.set(key, { id: "chest", slots: Array.from({ length: CHEST_SIZE }, () => null) });
+    return true;
+  }
+
+  removeChest(tx: number, ty: number): boolean {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "chest") return false;
+    this.objects.delete(key);
+    this.addItem("chest", 1);
+    return true;
+  }
+
+  getChestSlots(tx: number, ty: number): ReadonlyArray<InventorySlot | null> | null {
+    const obj = this.getObject(tx, ty);
+    if (!obj || obj.id !== "chest") return null;
+    return obj.slots.slice();
+  }
+
+  private getChestRef(tx: number, ty: number): Array<InventorySlot | null> | null {
+    const obj = this.getObject(tx, ty);
+    if (!obj || obj.id !== "chest") return null;
+    return obj.slots;
+  }
+
   private setTile(tx: number, ty: number, state: TileState): void {
     const k = tileKey(tx, ty);
     if (!state.tilled && !state.watered && !state.crop) {
@@ -177,6 +246,76 @@ export class FarmGame {
 
   getInventorySlots(): ReadonlyArray<InventorySlot | null> {
     return this.inventorySlots.slice();
+  }
+
+  private opsPickup(slots: Array<InventorySlot | null>, index: number): InventorySlot | null {
+    if (index < 0 || index >= slots.length) return null;
+    const slot = slots[index];
+    if (!slot) return null;
+    slots[index] = null;
+    return { itemId: slot.itemId, qty: slot.qty };
+  }
+
+  private opsSplitHalf(slots: Array<InventorySlot | null>, index: number): InventorySlot | null {
+    if (index < 0 || index >= slots.length) return null;
+    const slot = slots[index];
+    if (!slot) return null;
+    if (slot.qty <= 1) {
+      slots[index] = null;
+      return { itemId: slot.itemId, qty: slot.qty };
+    }
+    const take = Math.ceil(slot.qty / 2);
+    slot.qty -= take;
+    return { itemId: slot.itemId, qty: take };
+  }
+
+  private opsPlace(slots: Array<InventorySlot | null>, index: number, stack: InventorySlot): InventorySlot | null {
+    if (index < 0 || index >= slots.length) return stack;
+    if (!stack || stack.qty <= 0) return null;
+    const max = ITEMS[stack.itemId].maxStack;
+    const current = slots[index];
+
+    if (!current) {
+      const put = Math.min(max, stack.qty);
+      slots[index] = { itemId: stack.itemId, qty: put };
+      const rem = stack.qty - put;
+      return rem > 0 ? { itemId: stack.itemId, qty: rem } : null;
+    }
+
+    if (current.itemId === stack.itemId) {
+      const space = Math.max(0, max - current.qty);
+      const put = Math.min(space, stack.qty);
+      current.qty += put;
+      const rem = stack.qty - put;
+      return rem > 0 ? { itemId: stack.itemId, qty: rem } : null;
+    }
+
+    slots[index] = { itemId: stack.itemId, qty: Math.min(max, stack.qty) };
+    return { itemId: current.itemId, qty: current.qty };
+  }
+
+  private opsPlaceOne(
+    slots: Array<InventorySlot | null>,
+    index: number,
+    stack: InventorySlot
+  ): { ok: boolean; remaining: InventorySlot | null } {
+    if (index < 0 || index >= slots.length) return { ok: false, remaining: stack };
+    if (!stack || stack.qty <= 0) return { ok: false, remaining: null };
+
+    const max = ITEMS[stack.itemId].maxStack;
+    const current = slots[index];
+
+    if (!current) {
+      slots[index] = { itemId: stack.itemId, qty: 1 };
+      const remQty = stack.qty - 1;
+      return { ok: true, remaining: remQty > 0 ? { itemId: stack.itemId, qty: remQty } : null };
+    }
+
+    if (current.itemId !== stack.itemId) return { ok: false, remaining: stack };
+    if (current.qty >= max) return { ok: false, remaining: stack };
+    current.qty += 1;
+    const remQty = stack.qty - 1;
+    return { ok: true, remaining: remQty > 0 ? { itemId: stack.itemId, qty: remQty } : null };
   }
 
   private addItem(itemId: ItemId, qty: number): boolean {
@@ -267,70 +406,48 @@ export class FarmGame {
   }
 
   inventoryPickup(index: number): InventorySlot | null {
-    if (index < 0 || index >= this.inventorySlots.length) return null;
-    const slot = this.inventorySlots[index];
-    if (!slot) return null;
-    this.inventorySlots[index] = null;
-    return { itemId: slot.itemId, qty: slot.qty };
+    return this.opsPickup(this.inventorySlots, index);
   }
 
   inventorySplitHalf(index: number): InventorySlot | null {
-    if (index < 0 || index >= this.inventorySlots.length) return null;
-    const slot = this.inventorySlots[index];
-    if (!slot) return null;
-    if (slot.qty <= 1) {
-      this.inventorySlots[index] = null;
-      return { itemId: slot.itemId, qty: slot.qty };
-    }
-    const take = Math.ceil(slot.qty / 2);
-    slot.qty -= take;
-    return { itemId: slot.itemId, qty: take };
+    return this.opsSplitHalf(this.inventorySlots, index);
   }
 
   inventoryPlace(index: number, stack: InventorySlot): InventorySlot | null {
-    if (index < 0 || index >= this.inventorySlots.length) return stack;
-    if (!stack || stack.qty <= 0) return null;
-    const max = ITEMS[stack.itemId].maxStack;
-    const current = this.inventorySlots[index];
-
-    if (!current) {
-      const put = Math.min(max, stack.qty);
-      this.inventorySlots[index] = { itemId: stack.itemId, qty: put };
-      const rem = stack.qty - put;
-      return rem > 0 ? { itemId: stack.itemId, qty: rem } : null;
-    }
-
-    if (current.itemId === stack.itemId) {
-      const space = Math.max(0, max - current.qty);
-      const put = Math.min(space, stack.qty);
-      current.qty += put;
-      const rem = stack.qty - put;
-      return rem > 0 ? { itemId: stack.itemId, qty: rem } : null;
-    }
-
-    // Swap (cursor should already be within maxStack).
-    this.inventorySlots[index] = { itemId: stack.itemId, qty: Math.min(max, stack.qty) };
-    return { itemId: current.itemId, qty: current.qty };
+    return this.opsPlace(this.inventorySlots, index, stack);
   }
 
   inventoryPlaceOne(index: number, stack: InventorySlot): { ok: boolean; remaining: InventorySlot | null } {
-    if (index < 0 || index >= this.inventorySlots.length) return { ok: false, remaining: stack };
-    if (!stack || stack.qty <= 0) return { ok: false, remaining: null };
+    return this.opsPlaceOne(this.inventorySlots, index, stack);
+  }
 
-    const max = ITEMS[stack.itemId].maxStack;
-    const current = this.inventorySlots[index];
+  chestPickup(tx: number, ty: number, index: number): InventorySlot | null {
+    const slots = this.getChestRef(tx, ty);
+    if (!slots) return null;
+    return this.opsPickup(slots, index);
+  }
 
-    if (!current) {
-      this.inventorySlots[index] = { itemId: stack.itemId, qty: 1 };
-      const remQty = stack.qty - 1;
-      return { ok: true, remaining: remQty > 0 ? { itemId: stack.itemId, qty: remQty } : null };
-    }
+  chestSplitHalf(tx: number, ty: number, index: number): InventorySlot | null {
+    const slots = this.getChestRef(tx, ty);
+    if (!slots) return null;
+    return this.opsSplitHalf(slots, index);
+  }
 
-    if (current.itemId !== stack.itemId) return { ok: false, remaining: stack };
-    if (current.qty >= max) return { ok: false, remaining: stack };
-    current.qty += 1;
-    const remQty = stack.qty - 1;
-    return { ok: true, remaining: remQty > 0 ? { itemId: stack.itemId, qty: remQty } : null };
+  chestPlace(tx: number, ty: number, index: number, stack: InventorySlot): InventorySlot | null {
+    const slots = this.getChestRef(tx, ty);
+    if (!slots) return stack;
+    return this.opsPlace(slots, index, stack);
+  }
+
+  chestPlaceOne(
+    tx: number,
+    ty: number,
+    index: number,
+    stack: InventorySlot
+  ): { ok: boolean; remaining: InventorySlot | null } {
+    const slots = this.getChestRef(tx, ty);
+    if (!slots) return { ok: false, remaining: stack };
+    return this.opsPlaceOne(slots, index, stack);
   }
 
   private canSpendEnergy(cost: number): boolean {

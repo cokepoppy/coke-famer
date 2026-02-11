@@ -117,3 +117,65 @@ test("economy loop: buy seeds and sell harvest", async ({ page }) => {
   expect(sold.res.ok).toBeTruthy();
   expect(sold.res.goldGained).toBeGreaterThan(0);
 });
+
+test("chest: store items and persist across reload", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+  await page.locator("#btn-reset").click();
+
+  const placed = await page.evaluate(() => {
+    const s = (window as any).__cokeFamer;
+    const buy = s.api.shopBuy("chest", 1);
+    if (!buy.ok) return { ok: false, reason: buy.reason ?? "buy_failed" };
+
+    const { tx, ty } = s.player;
+    const candidates = [
+      { tx: tx + 1, ty },
+      { tx: tx - 1, ty },
+      { tx, ty: ty + 1 },
+      { tx, ty: ty - 1 },
+      { tx, ty }
+    ];
+
+    let pos: { tx: number; ty: number } | null = null;
+    for (const c of candidates) {
+      if (s.api.placeChestAt(c.tx, c.ty)) {
+        pos = c;
+        break;
+      }
+    }
+    if (!pos) return { ok: false, reason: "place_failed" };
+
+    if (!s.api.openChestAt(pos.tx, pos.ty)) return { ok: false, reason: "open_failed" };
+
+    const invSlots = s.inventorySlots ?? [];
+    const seedIndex = invSlots.findIndex((it: any) => it?.itemId === "parsnip_seed");
+    if (seedIndex < 0) return { ok: false, reason: "no_seed_slot" };
+    const picked = s.api.invPickup(seedIndex);
+    if (!picked) return { ok: false, reason: "pickup_failed" };
+    const rem = s.api.chestPlace(0, picked);
+    if (rem) return { ok: false, reason: "unexpected_remainder" };
+
+    s.api.save();
+    return { ok: true, pos, qty: picked.qty };
+  });
+
+  expect(placed.ok).toBeTruthy();
+
+  await page.reload();
+  await page.waitForSelector("#game-container canvas");
+  await page.waitForFunction(() => (window as any).__cokeFamer?.ready === true);
+
+  const chestSlot0 = await page.evaluate((pos) => {
+    const s = (window as any).__cokeFamer;
+    const ok = s.api.openChestAt(pos.tx, pos.ty);
+    if (!ok) return null;
+    const chest = s.chest;
+    return chest?.slots?.[0] ?? null;
+  }, (placed as any).pos);
+
+  expect(chestSlot0).toBeTruthy();
+  expect((chestSlot0 as any).itemId).toBe("parsnip_seed");
+  expect((chestSlot0 as any).qty).toBeGreaterThan(0);
+});

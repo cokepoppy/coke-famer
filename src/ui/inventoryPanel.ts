@@ -31,8 +31,20 @@ export function mountInventoryPanel(host: HTMLElement): {
   header.appendChild(headerRight);
   panel.appendChild(header);
 
-  const grid = el("div", "inv-grid");
-  panel.appendChild(grid);
+  const invGrid = el("div", "inv-grid");
+  panel.appendChild(invGrid);
+
+  const chestWrap = el("div", "chest-wrap");
+  const chestHeader = el("div", "chest-header");
+  const chestTitle = el("div", "chest-title");
+  const chestClose = el("button", "btn");
+  chestClose.textContent = "Close Chest";
+  chestHeader.appendChild(chestTitle);
+  chestHeader.appendChild(chestClose);
+  chestWrap.appendChild(chestHeader);
+  const chestGrid = el("div", "inv-grid");
+  chestWrap.appendChild(chestGrid);
+  panel.appendChild(chestWrap);
 
   const cursorLine = el("div", "inv-cursor");
   panel.appendChild(cursorLine);
@@ -61,33 +73,44 @@ export function mountInventoryPanel(host: HTMLElement): {
   };
   syncCursorLine();
 
-  const leftClick = (slotIndex: number) => {
+  type Container = "inv" | "chest";
+  const leftClick = (container: Container, slotIndex: number) => {
     const api = window.__cokeFamer?.api;
     if (!api) return;
 
     if (!cursor) {
-      cursor = api.invPickup(slotIndex) as any;
+      cursor =
+        container === "inv" ? ((api.invPickup(slotIndex) as any) ?? null) : ((api.chestPickup(slotIndex) as any) ?? null);
       syncCursorLine();
       return;
     }
 
-    const res = api.invPlace(slotIndex, cursor as any) as any;
+    const res =
+      container === "inv"
+        ? (api.invPlace(slotIndex, cursor as any) as any)
+        : (api.chestPlace(slotIndex, cursor as any) as any);
     // If place returned a different item, that's a swap; otherwise it's remainder.
     cursor = res;
     syncCursorLine();
   };
 
-  const rightClick = (slotIndex: number) => {
+  const rightClick = (container: Container, slotIndex: number) => {
     const api = window.__cokeFamer?.api;
     if (!api) return;
 
     if (!cursor) {
-      cursor = api.invSplitHalf(slotIndex) as any;
+      cursor =
+        container === "inv"
+          ? ((api.invSplitHalf(slotIndex) as any) ?? null)
+          : ((api.chestSplitHalf(slotIndex) as any) ?? null);
       syncCursorLine();
       return;
     }
 
-    const placed = api.invPlaceOne(slotIndex, cursor as any) as any;
+    const placed =
+      container === "inv"
+        ? (api.invPlaceOne(slotIndex, cursor as any) as any)
+        : (api.chestPlaceOne(slotIndex, cursor as any) as any);
     cursor = placed.remaining;
     syncCursorLine();
   };
@@ -99,10 +122,14 @@ export function mountInventoryPanel(host: HTMLElement): {
     syncCursorLine();
   };
 
+  chestClose.onclick = () => {
+    window.__cokeFamer?.api?.closeChest();
+  };
+
   const render = () => {
     if (!open) return;
     const slots = (window.__cokeFamer as any)?.inventorySlots as Array<InventorySlot | null> | undefined;
-    grid.innerHTML = "";
+    invGrid.innerHTML = "";
     const safeSlots = slots ?? [];
     for (let i = 0; i < Math.max(24, safeSlots.length); i++) {
       const slot = safeSlots[i] ?? null;
@@ -119,14 +146,49 @@ export function mountInventoryPanel(host: HTMLElement): {
       }
 
       cell.onmousedown = (ev) => {
-        if (ev.button === 2) rightClick(i);
-        else leftClick(i);
+        if (ev.button === 2) rightClick("inv", i);
+        else leftClick("inv", i);
       };
       stopContextMenu(cell);
 
       cell.appendChild(name);
       cell.appendChild(qty);
-      grid.appendChild(cell);
+      invGrid.appendChild(cell);
+    }
+
+    const chest = (window.__cokeFamer as any)?.chest as
+      | { tx: number; ty: number; slots: Array<InventorySlot | null> }
+      | null
+      | undefined;
+    if (chest && Array.isArray(chest.slots)) {
+      chestWrap.style.display = "block";
+      chestTitle.textContent = `Chest @ ${chest.tx},${chest.ty}`;
+      chestGrid.innerHTML = "";
+      const cs = chest.slots;
+      for (let i = 0; i < Math.max(24, cs.length); i++) {
+        const slot = cs[i] ?? null;
+        const cell = el("div", "inv-slot");
+        const name = el("div", "inv-name");
+        const qty = el("div", "inv-qty");
+        if (slot) {
+          name.textContent = String((slot as any).itemId);
+          qty.textContent = String((slot as any).qty);
+        } else {
+          name.textContent = "";
+          qty.textContent = "";
+        }
+        cell.onmousedown = (ev) => {
+          if (ev.button === 2) rightClick("chest", i);
+          else leftClick("chest", i);
+        };
+        stopContextMenu(cell);
+        cell.appendChild(name);
+        cell.appendChild(qty);
+        chestGrid.appendChild(cell);
+      }
+    } else {
+      chestWrap.style.display = "none";
+      chestGrid.innerHTML = "";
     }
   };
 

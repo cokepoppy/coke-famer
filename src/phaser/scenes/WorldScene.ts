@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { FarmGame, GAME_CONSTANTS } from "../../simulation/FarmGame";
 import type { ActionId, ToolId } from "../../simulation/types";
 import { CROPS } from "../../content/crops";
+import type { ItemId } from "../../content/items";
 
 const ASSETS_BASE = "ga-assets";
 const TILE_SIZE = 32;
@@ -39,6 +40,10 @@ export class WorldScene extends Phaser.Scene {
   private timePaused = false;
   private timeAccumulatorMs = 0;
   private readonly msPerMinute = 700; // ~Stardew: 10 minutes per 7 seconds
+  private activeChest: { tx: number; ty: number } | null = null;
+  private objectLayer!: Phaser.GameObjects.Layer;
+  private objectVisuals = new Map<string, Phaser.GameObjects.Rectangle>();
+  private selectedSeed: ItemId = "parsnip_seed";
 
   preload(): void {
     this.load.tilemapTiledJSON(
@@ -251,7 +256,11 @@ export class WorldScene extends Phaser.Scene {
     this.farmLayer = this.add.layer();
     this.farmLayer.setDepth(ENTITY_DEPTH_BASE - 10);
 
+    this.objectLayer = this.add.layer();
+    this.objectLayer.setDepth(ENTITY_DEPTH_BASE + 1);
+
     this.redrawAllFarmTiles();
+    this.redrawAllObjects();
 
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
       this.drawReticle(pointer);
@@ -263,8 +272,10 @@ export class WorldScene extends Phaser.Scene {
     this.input.keyboard?.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, (ev: KeyboardEvent) => {
       if (ev.key === "1") this.setMode("hoe");
       if (ev.key === "2") this.setMode("watering_can");
-      if (ev.key === "3") this.setMode("parsnip_seed");
+      if (ev.key === "3") this.setMode(this.selectedSeed as any);
       if (ev.key === "4") this.setMode("hand");
+      if (ev.key === "5") this.setMode("chest");
+      if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
     });
 
@@ -301,12 +312,16 @@ export class WorldScene extends Phaser.Scene {
         load: () => {
           const loaded = FarmGame.loadFromStorage();
           if (loaded) this.gameState = loaded;
+          this.activeChest = null;
           this.redrawAllFarmTiles();
+          this.redrawAllObjects();
           this.syncWindowState();
         },
         reset: () => {
           this.gameState.resetToNewGame();
+          this.activeChest = null;
           this.redrawAllFarmTiles();
+          this.redrawAllObjects();
           this.syncWindowState();
         },
         useAt: (tx: number, ty: number, mode?: string) => {
@@ -353,6 +368,61 @@ export class WorldScene extends Phaser.Scene {
           this.syncWindowState();
           this.gameState.saveToStorage();
           return res;
+        },
+        placeChestAt: (tx: number, ty: number) => {
+          const ok = this.gameState.placeChest(tx, ty);
+          if (ok) {
+            this.toast("Placed chest", "info");
+            this.redrawAllObjects();
+            this.gameState.saveToStorage();
+          } else {
+            this.toast("Place chest failed", "warn");
+          }
+          this.syncWindowState();
+          return ok;
+        },
+        openChestAt: (tx: number, ty: number) => {
+          const obj = this.gameState.getObject(tx, ty);
+          if (!obj || obj.id !== "chest") return false;
+          this.activeChest = { tx, ty };
+          this.toast("Chest opened", "info");
+          this.syncWindowState();
+          return true;
+        },
+        closeChest: () => {
+          this.activeChest = null;
+          this.syncWindowState();
+        },
+        chestPickup: (index: number) => {
+          if (!this.activeChest) return null;
+          const picked = this.gameState.chestPickup(this.activeChest.tx, this.activeChest.ty, index);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+        },
+        chestSplitHalf: (index: number) => {
+          if (!this.activeChest) return null;
+          const picked = this.gameState.chestSplitHalf(this.activeChest.tx, this.activeChest.ty, index);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return picked ? { itemId: picked.itemId, qty: picked.qty } : null;
+        },
+        chestPlace: (index: number, stack: { itemId: string; qty: number }) => {
+          if (!this.activeChest) return stack as any;
+          const rem = this.gameState.chestPlace(this.activeChest.tx, this.activeChest.ty, index, stack as any);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return rem ? { itemId: rem.itemId, qty: rem.qty } : null;
+        },
+        chestPlaceOne: (index: number, stack: { itemId: string; qty: number }) => {
+          if (!this.activeChest) return { ok: false, remaining: stack as any };
+          const res = this.gameState.chestPlaceOne(this.activeChest.tx, this.activeChest.ty, index, stack as any);
+          this.gameState.saveToStorage();
+          this.syncWindowState();
+          return {
+            ok: res.ok,
+            remaining: res.remaining ? { itemId: res.remaining.itemId, qty: res.remaining.qty } : null
+          };
         }
       }
     };
@@ -477,7 +547,11 @@ export class WorldScene extends Phaser.Scene {
     window.__cokeFamer.mode = this.mode;
     window.__cokeFamer.inventory = {
       parsnip_seed: this.gameState?.countItem("parsnip_seed") ?? 0,
-      parsnip: this.gameState?.countItem("parsnip") ?? 0
+      parsnip: this.gameState?.countItem("parsnip") ?? 0,
+      potato_seed: this.gameState?.countItem("potato_seed" as any) ?? 0,
+      blueberry_seed: this.gameState?.countItem("blueberry_seed" as any) ?? 0,
+      cranberry_seed: this.gameState?.countItem("cranberry_seed" as any) ?? 0,
+      chest: this.gameState?.countItem("chest" as any) ?? 0
     };
     window.__cokeFamer.gold = this.gameState?.gold ?? window.__cokeFamer.gold;
     const cal = this.gameState?.getCalendar();
@@ -491,6 +565,18 @@ export class WorldScene extends Phaser.Scene {
       ?.getInventorySlots()
       .map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null));
     window.__cokeFamer.timePaused = this.timePaused;
+    window.__cokeFamer.selectedSeed = this.selectedSeed;
+
+    if (this.activeChest) {
+      const slots = this.gameState.getChestSlots(this.activeChest.tx, this.activeChest.ty) ?? [];
+      window.__cokeFamer.chest = {
+        tx: this.activeChest.tx,
+        ty: this.activeChest.ty,
+        slots: slots.map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null))
+      };
+    } else {
+      window.__cokeFamer.chest = null;
+    }
   }
 
   private formatTime(minutes: number): string {
@@ -510,6 +596,21 @@ export class WorldScene extends Phaser.Scene {
     if (window.__cokeFamer) window.__cokeFamer.lastClick = { tx: tile.tx, ty: tile.ty, blocked: false, toggled: ok };
   }
 
+  private cycleSeed(): void {
+    const order: ItemId[] = ["parsnip_seed", "potato_seed", "blueberry_seed", "cranberry_seed"];
+    const start = order.indexOf(this.selectedSeed);
+    for (let i = 1; i <= order.length; i++) {
+      const next = order[(start + i) % order.length]!;
+      if ((this.gameState.countItem(next as any) ?? 0) > 0) {
+        this.selectedSeed = next;
+        this.setMode(this.selectedSeed as any);
+        return;
+      }
+    }
+    // If none available, keep current.
+    this.toast("No seeds to cycle", "warn");
+  }
+
   private applyActionAt(tx: number, ty: number): boolean {
     const blocked = this.collisionsLayer.getTileAt(tx, ty, true);
     const isBlocked = Boolean(blocked?.properties?.collide);
@@ -522,31 +623,64 @@ export class WorldScene extends Phaser.Scene {
       return false;
     }
 
-    if (this.mode === "hoe" || this.mode === "watering_can" || this.mode === "parsnip_seed") {
+    const cropIdFromSeed = Object.values(CROPS).find((c) => c.seedItemId === this.mode)?.id ?? null;
+    const isSeedMode = Boolean(cropIdFromSeed);
+
+    if (this.mode === "hoe" || this.mode === "watering_can" || isSeedMode) {
       if (this.gameState.energy <= 0) {
         this.toast("No energy", "warn");
         if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok: false, tx, ty };
         return false;
       }
     }
-    if (this.mode === "parsnip_seed" && this.gameState.countItem("parsnip_seed") <= 0) {
-      this.toast("No seeds", "warn");
-      if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok: false, tx, ty };
-      return false;
+    if (isSeedMode) {
+      if ((this.gameState.countItem(this.mode as any) ?? 0) <= 0) {
+        this.toast("No seeds", "warn");
+        if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok: false, tx, ty };
+        return false;
+      }
     }
 
     let ok = false;
     if (this.mode === "hoe") ok = this.gameState.hoe(tx, ty);
     else if (this.mode === "watering_can") ok = this.gameState.water(tx, ty);
-    else if (this.mode === "parsnip_seed") ok = this.gameState.plant(tx, ty, "parsnip");
-    else if ((this.mode as ToolId) === "hand") ok = this.gameState.harvest(tx, ty);
+    else if (isSeedMode) ok = this.gameState.plant(tx, ty, cropIdFromSeed!);
+    else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
+    else if ((this.mode as ToolId) === "hand") {
+      const obj = this.gameState.getObject(tx, ty);
+      if (obj?.id === "chest") {
+        this.activeChest = { tx, ty };
+        this.toast("Chest opened (press I to manage items)", "info");
+        ok = true;
+      } else {
+        ok = this.gameState.harvest(tx, ty);
+      }
+    }
 
     this.updateFarmTileVisual(tx, ty);
+    this.redrawAllObjects();
     this.syncWindowState();
 
     if (window.__cokeFamer) window.__cokeFamer.lastAction = { kind: this.mode, ok, tx, ty };
     if (!ok) this.toast("Action failed (state/energy/item)", "warn");
     return ok;
+  }
+
+  private redrawAllObjects(): void {
+    for (const r of this.objectVisuals.values()) r.destroy();
+    this.objectVisuals.clear();
+
+    for (const o of this.gameState.getAllObjects()) {
+      if (o.obj.id === "chest") {
+        const x = o.tx * this.map.tileWidth;
+        const y = o.ty * this.map.tileHeight;
+        const rect = this.add.rectangle(x + 4, y + 8, TILE_SIZE - 8, TILE_SIZE - 8, 0x8b5a2b, 0.9).setOrigin(0);
+        rect.setStrokeStyle(1, 0x3b2a18, 0.8);
+        rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
+        this.objectLayer.add(rect);
+        this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+      }
+    }
   }
 
   private tickClock(deltaMs: number): void {

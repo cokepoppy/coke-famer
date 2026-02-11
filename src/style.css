@@ -125,6 +125,23 @@ body {
   gap: 6px;
 }
 
+.chest-wrap {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chest-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.chest-title {
+  font-weight: 700;
+}
+
 .inv-cursor {
   margin-top: 10px;
   font-size: 12px;

@@ -18,8 +18,10 @@ declare global {
       dayOfSeason?: number;
       year?: number;
       weather?: string;
+      selectedSeed?: string;
       timePaused?: boolean;
       toast?: { text: string; kind: "info" | "warn" | "error"; ts: number } | null;
+      chest?: { tx: number; ty: number; slots: Array<{ itemId: string; qty: number } | null> } | null;
       tilledCount: number;
       lastClick: { tx: number; ty: number; blocked: boolean; toggled: boolean } | null;
       lastAction: { kind: string; ok: boolean; tx: number; ty: number } | null;
@@ -39,6 +41,16 @@ declare global {
         ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
         shopBuy: (itemId: string, qty: number) => { ok: boolean; reason?: string };
         sellStack: (stack: { itemId: string; qty: number }) => { ok: boolean; goldGained?: number; reason?: string };
+        placeChestAt: (tx: number, ty: number) => boolean;
+        openChestAt: (tx: number, ty: number) => boolean;
+        closeChest: () => void;
+        chestPickup: (index: number) => { itemId: string; qty: number } | null;
+        chestSplitHalf: (index: number) => { itemId: string; qty: number } | null;
+        chestPlace: (index: number, stack: { itemId: string; qty: number }) => { itemId: string; qty: number } | null;
+        chestPlaceOne: (
+          index: number,
+          stack: { itemId: string; qty: number }
+        ) => { ok: boolean; remaining: { itemId: string; qty: number } | null };
       };
     };
   }
