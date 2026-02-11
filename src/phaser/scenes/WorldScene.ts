@@ -56,6 +56,7 @@ export class WorldScene extends Phaser.Scene {
   private npc!: Phaser.Physics.Arcade.Sprite;
   private npcTargets: Array<{ atMinutes: number; tx: number; ty: number }> = [];
   private dialogue: { npcId: NpcId; text: string } | null = null;
+  private npcPrompt!: Phaser.GameObjects.Text;
 
   preload(): void {
     this.load.tilemapTiledJSON(
@@ -288,6 +289,9 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, (ev: KeyboardEvent) => {
+      const target = ev.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
       if (ev.key === "1") this.setMode("hoe");
       if (ev.key === "2") this.setMode("watering_can");
       if (ev.key === "3") this.setMode(this.selectedSeed as any);
@@ -305,6 +309,7 @@ export class WorldScene extends Phaser.Scene {
       if (ev.key.toLowerCase() === "g") this.setMode("gift");
       if (ev.key.toLowerCase() === "q") this.cycleSeed();
       if (ev.key.toLowerCase() === "p") this.setPaused(!this.timePaused);
+      if (ev.key.toLowerCase() === "e") this.tryTalkHotkey();
     });
 
     const initTx = this.map.worldToTileX(this.player.x) ?? 0;
@@ -697,6 +702,31 @@ export class WorldScene extends Phaser.Scene {
     this.syncWindowState();
   }
 
+  private tryTalkHotkey(): void {
+    if (!this.npc) return;
+    if (this.dialogue) return;
+    const ntx = this.map.worldToTileX(this.npc.x) ?? 0;
+    const nty = this.map.worldToTileY(this.npc.y) ?? 0;
+    const dist = Math.abs(ntx - this.playerTile.tx) + Math.abs(nty - this.playerTile.ty);
+    if (dist > 1) return;
+    this.talkToNpc();
+  }
+
+  private talkToNpc(): void {
+    const res = this.gameState.talkToNpc(this.npcId);
+    if (res.ok) {
+      this.dialogue = { npcId: this.npcId, text: "Hi! Nice to see you." };
+      this.toast(`Talked (+${res.friendshipGained ?? 0})`, "info");
+      this.gameState.saveToStorage(this.saveSlot);
+    } else if (res.reason === "already_talked") {
+      this.dialogue = { npcId: this.npcId, text: "We already talked today. See you tomorrow!" };
+      this.toast("Already talked today", "warn");
+    } else {
+      this.toast(`Talk failed: ${res.reason ?? "unknown"}`, "warn");
+    }
+    this.syncWindowState();
+  }
+
   private createNpc(): void {
     this.npc = this.physics.add.sprite(1856 + 64, 288 + 64, "player", "down");
     this.npc.setTint(0xffc107);
@@ -706,6 +736,18 @@ export class WorldScene extends Phaser.Scene {
     body.setOffset(8, 14);
     this.physics.add.collider(this.npc, this.collisionsLayer);
     this.physics.add.collider(this.player, this.npc);
+
+    this.npcPrompt = this.add
+      .text(0, 0, "E Talk", {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+        fontSize: "12px",
+        color: "#0b0d10",
+        backgroundColor: "rgba(255,255,255,0.9)",
+        padding: { left: 6, right: 6, top: 3, bottom: 3 }
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(ENTITY_DEPTH_BASE + 99999)
+      .setVisible(false);
 
     // Pick two open tiles near the player for a simple schedule.
     const baseTx = this.map.worldToTileX(this.player.x) ?? 0;
@@ -799,15 +841,25 @@ export class WorldScene extends Phaser.Scene {
     const targetY = (ty + 0.5) * this.map.tileHeight;
     const dx = targetX - this.npc.x;
     const dy = targetY - this.npc.y;
-    const dist = Math.hypot(dx, dy);
+    const moveDist = Math.hypot(dx, dy);
     const speed = 90;
     const body = this.npc.body as Phaser.Physics.Arcade.Body;
-    if (dist < 2) {
+    if (moveDist < 2) {
       body.setVelocity(0, 0);
     } else {
-      body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
+      body.setVelocity((dx / moveDist) * speed, (dy / moveDist) * speed);
     }
     this.npc.setDepth(ENTITY_DEPTH_BASE + this.npc.y);
+
+    // Show an interaction prompt when adjacent and not currently in dialogue.
+    const ntx = this.map.worldToTileX(this.npc.x) ?? 0;
+    const nty = this.map.worldToTileY(this.npc.y) ?? 0;
+    const talkDist = Math.abs(ntx - this.playerTile.tx) + Math.abs(nty - this.playerTile.ty);
+    const show = talkDist <= 1 && !this.dialogue;
+    this.npcPrompt.setVisible(show);
+    if (show) {
+      this.npcPrompt.setPosition(this.npc.x, this.npc.y - 20);
+    }
   }
 
   private isNpcAt(tx: number, ty: number): boolean {
@@ -1333,19 +1385,8 @@ export class WorldScene extends Phaser.Scene {
       }
     } else if ((this.mode as ToolId) === "hand") {
       if (this.isNpcAt(tx, ty)) {
-        const res = this.gameState.talkToNpc(this.npcId);
-        ok = res.ok;
-        if (ok) {
-          this.dialogue = { npcId: this.npcId, text: "Hi! Nice to see you." };
-          this.toast(`Talked (+${res.friendshipGained ?? 0})`, "info");
-          this.gameState.saveToStorage(this.saveSlot);
-        } else if (res.reason === "already_talked") {
-          ok = true;
-          this.dialogue = { npcId: this.npcId, text: "We already talked today. See you tomorrow!" };
-          this.toast("Already talked today", "warn");
-        } else {
-          this.toast(`Talk failed: ${res.reason ?? "unknown"}`, "warn");
-        }
+        this.talkToNpc();
+        ok = true;
       } else {
         const obj = this.gameState.getObject(tx, ty);
         if (obj?.id === "chest") {
