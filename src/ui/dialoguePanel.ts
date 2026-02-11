@@ -10,6 +10,7 @@ export function mountDialoguePanel(host: HTMLElement): {
   setOpen: (open: boolean) => void;
   isOpen: () => boolean;
   render: () => void;
+  setAnchor: (pageX: number, pageY: number) => void;
 } {
   const panel = el("div", "dialogue-panel");
   const header = el("div", "dialogue-header");
@@ -28,6 +29,7 @@ export function mountDialoguePanel(host: HTMLElement): {
 
   let open = false;
   let selectedGiftItemId: string | null = null;
+  let anchor: { x: number; y: number } | null = null;
   const setOpen = (next: boolean) => {
     open = next;
     panel.style.display = open ? "block" : "none";
@@ -98,7 +100,23 @@ export function mountDialoguePanel(host: HTMLElement): {
     giftBtn.onclick = () => window.__cokeFamer?.api?.giftToNpc?.(d.npcId, selectedGiftItemId ?? undefined);
     actions.appendChild(giftBtn);
     body.appendChild(actions);
+
+    // Position the panel near the NPC anchor (if available) after content updates.
+    if (anchor) {
+      const pad = 12;
+      const r = panel.getBoundingClientRect();
+      let left = anchor.x + 12;
+      let top = anchor.y - r.height - 18;
+      left = Math.max(pad, Math.min(left, window.innerWidth - r.width - pad));
+      top = Math.max(pad, Math.min(top, window.innerHeight - r.height - pad));
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+    }
   };
 
-  return { setOpen, isOpen: () => open, render };
+  const setAnchor = (pageX: number, pageY: number) => {
+    anchor = { x: pageX, y: pageY };
+  };
+
+  return { setOpen, isOpen: () => open, render, setAnchor };
 }

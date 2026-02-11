@@ -753,6 +753,7 @@ export class WorldScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.tickClock(delta);
     this.tickNpc(delta);
+    this.syncNpcWindowState();
 
     const speed = 180;
     const vx =
@@ -890,6 +891,28 @@ export class WorldScene extends Phaser.Scene {
     window.__cokeFamer.toast = { text, kind, ts: Date.now() };
   }
 
+  private syncNpcWindowState(): void {
+    if (!window.__cokeFamer) return;
+    if (!this.npc) {
+      window.__cokeFamer.npc = null;
+      return;
+    }
+    const ntx = this.map.worldToTileX(this.npc.x) ?? 0;
+    const nty = this.map.worldToTileY(this.npc.y) ?? 0;
+    const cam = this.cameras.main;
+    const screenX = (this.npc.x - cam.worldView.x) * cam.zoom;
+    const screenY = (this.npc.y - cam.worldView.y) * cam.zoom;
+    window.__cokeFamer.npc = {
+      id: this.npcId,
+      x: this.npc.x,
+      y: this.npc.y,
+      tx: ntx,
+      ty: nty,
+      screenX,
+      screenY
+    };
+  }
+
   private syncWindowState(): void {
     if (!window.__cokeFamer) return;
     window.__cokeFamer.day = this.gameState?.day ?? window.__cokeFamer.day;
@@ -936,6 +959,7 @@ export class WorldScene extends Phaser.Scene {
       [this.npcId]: this.gameState.getRelationship(this.npcId)
     };
     window.__cokeFamer.dialogue = this.dialogue ? { ...this.dialogue } : null;
+    this.syncNpcWindowState();
     window.__cokeFamer.inventorySlots = this.gameState
       ?.getInventorySlots()
       .map((s) => (s ? { itemId: s.itemId, qty: s.qty } : null));

@@ -26,6 +26,7 @@ declare global {
       quest?: { dayIssued: number; itemId: string; qty: number; rewardGold: number; completed: boolean } | null;
       relationships?: Record<string, { friendship: number; lastTalkDay: number; lastGiftDay: number }>;
       dialogue?: { npcId: string; text: string } | null;
+      npc?: { id: string; x: number; y: number; tx: number; ty: number; screenX: number; screenY: number } | null;
       tilledCount: number;
       lastClick: { tx: number; ty: number; blocked: boolean; toggled: boolean } | null;
       lastAction: { kind: string; ok: boolean; tx: number; ty: number } | null;

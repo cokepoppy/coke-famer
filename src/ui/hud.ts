@@ -134,7 +134,12 @@ export function mountHud(containerId: string): void {
 
   const dialogueHost = el("div");
   host.appendChild(dialogueHost);
-  const { setOpen: setDialogueOpen, isOpen: isDialogueOpen, render: renderDialogue } = mountDialoguePanel(dialogueHost);
+  const {
+    setOpen: setDialogueOpen,
+    isOpen: isDialogueOpen,
+    render: renderDialogue,
+    setAnchor: setDialogueAnchor
+  } = mountDialoguePanel(dialogueHost);
 
   let invPausedByUi = false;
   const openInventory = () => {
@@ -331,7 +336,17 @@ export function mountHud(containerId: string): void {
       if (isQuestOpen()) renderQuest();
       if (isSaveOpen()) renderSave();
       if (s.dialogue && !isDialogueOpen()) openDialogue();
-      if (isDialogueOpen()) renderDialogue();
+      if (isDialogueOpen()) {
+        const canvas = document.querySelector("#game-container canvas") as HTMLCanvasElement | null;
+        const npc = s.npc;
+        if (canvas && npc && Number.isFinite(npc.screenX) && Number.isFinite(npc.screenY)) {
+          const rect = canvas.getBoundingClientRect();
+          const sx = canvas.width ? rect.width / canvas.width : 1;
+          const sy = canvas.height ? rect.height / canvas.height : 1;
+          setDialogueAnchor(rect.left + npc.screenX * sx, rect.top + npc.screenY * sy);
+        }
+        renderDialogue();
+      }
 
       btnPause.textContent = s.timePaused ? "Resume" : "Pause";
 
