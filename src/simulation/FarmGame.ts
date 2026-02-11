@@ -241,6 +241,21 @@ export class FarmGame {
     return true;
   }
 
+  pickupChestIfEmpty(tx: number, ty: number): { ok: boolean; reason?: "not_a_chest" | "not_empty" | "inv_full" } {
+    const key = tileKey(tx, ty);
+    const obj = this.objects.get(key);
+    if (!obj || obj.id !== "chest") return { ok: false, reason: "not_a_chest" };
+    const hasAny = obj.slots.some((s) => Boolean(s));
+    if (hasAny) return { ok: false, reason: "not_empty" };
+    this.objects.delete(key);
+    const added = this.addItem("chest", 1);
+    if (!added) {
+      this.objects.set(key, obj);
+      return { ok: false, reason: "inv_full" };
+    }
+    return { ok: true };
+  }
+
   getChestSlots(tx: number, ty: number): ReadonlyArray<InventorySlot | null> | null {
     const obj = this.getObject(tx, ty);
     if (!obj || obj.id !== "chest") return null;

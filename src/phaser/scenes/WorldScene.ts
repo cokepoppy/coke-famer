@@ -43,6 +43,7 @@ export class WorldScene extends Phaser.Scene {
   private activeChest: { tx: number; ty: number } | null = null;
   private objectLayer!: Phaser.GameObjects.Layer;
   private objectVisuals = new Map<string, Phaser.GameObjects.Rectangle>();
+  private objectBodies!: Phaser.GameObjects.Group;
   private selectedSeed: ItemId = "parsnip_seed";
   private isFreshGame = false;
 
@@ -260,6 +261,8 @@ export class WorldScene extends Phaser.Scene {
 
     this.objectLayer = this.add.layer();
     this.objectLayer.setDepth(ENTITY_DEPTH_BASE + 1);
+    this.objectBodies = this.add.group();
+    this.physics.add.collider(this.player, this.objectBodies);
 
     this.redrawAllFarmTiles();
 
@@ -723,8 +726,25 @@ export class WorldScene extends Phaser.Scene {
     else if (this.mode === "watering_can") ok = this.gameState.water(tx, ty);
     else if (isSeedMode) ok = this.gameState.plant(tx, ty, cropIdFromSeed!);
     else if (this.mode === "chest") ok = this.gameState.placeChest(tx, ty);
-    else if ((this.mode as ToolId) === "axe") ok = this.gameState.chop(tx, ty);
-    else if ((this.mode as ToolId) === "pickaxe") ok = this.gameState.mine(tx, ty);
+    else if ((this.mode as ToolId) === "axe") {
+      const obj = this.gameState.getObject(tx, ty);
+      if (obj?.id === "chest") {
+        const res = this.gameState.pickupChestIfEmpty(tx, ty);
+        ok = res.ok;
+        if (ok) {
+          if (this.activeChest && this.activeChest.tx === tx && this.activeChest.ty === ty) this.activeChest = null;
+          this.toast("Picked up chest", "info");
+        } else if (res.reason === "not_empty") {
+          this.toast("Chest not empty", "warn");
+        } else if (res.reason === "inv_full") {
+          this.toast("Inventory full", "warn");
+        } else {
+          this.toast("Not a chest", "warn");
+        }
+      } else {
+        ok = this.gameState.chop(tx, ty);
+      }
+    } else if ((this.mode as ToolId) === "pickaxe") ok = this.gameState.mine(tx, ty);
     else if ((this.mode as ToolId) === "hand") {
       const obj = this.gameState.getObject(tx, ty);
       if (obj?.id === "chest") {
@@ -748,6 +768,7 @@ export class WorldScene extends Phaser.Scene {
   private redrawAllObjects(): void {
     for (const r of this.objectVisuals.values()) r.destroy();
     this.objectVisuals.clear();
+    this.objectBodies.clear(true, true);
 
     for (const o of this.gameState.getAllObjects()) {
       if (o.obj.id === "chest") {
@@ -758,6 +779,7 @@ export class WorldScene extends Phaser.Scene {
         rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 10, TILE_SIZE - 10, 0, 0);
       } else if (o.obj.id === "wood") {
         const x = o.tx * this.map.tileWidth;
         const y = o.ty * this.map.tileHeight;
@@ -766,6 +788,7 @@ export class WorldScene extends Phaser.Scene {
         rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 12, TILE_SIZE - 12, 0, 0);
       } else if (o.obj.id === "stone") {
         const x = o.tx * this.map.tileWidth;
         const y = o.ty * this.map.tileHeight;
@@ -774,8 +797,25 @@ export class WorldScene extends Phaser.Scene {
         rect.setDepth(ENTITY_DEPTH_BASE + y + 2);
         this.objectLayer.add(rect);
         this.objectVisuals.set(`${o.tx},${o.ty}`, rect);
+        this.addObjectBody(o.tx, o.ty, TILE_SIZE - 12, TILE_SIZE - 12, 0, 0);
       }
     }
+  }
+
+  private addObjectBody(
+    tx: number,
+    ty: number,
+    w: number,
+    h: number,
+    ox: number,
+    oy: number
+  ): void {
+    const x = tx * this.map.tileWidth;
+    const y = ty * this.map.tileHeight;
+    const bodyRect = this.add.rectangle(x + ox, y + oy, w, h, 0x000000, 0).setOrigin(0);
+    bodyRect.setVisible(false);
+    this.physics.add.existing(bodyRect, true);
+    this.objectBodies.add(bodyRect);
   }
 
   private tickClock(deltaMs: number): void {
